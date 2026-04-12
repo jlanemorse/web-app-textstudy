@@ -10,7 +10,7 @@ export default function DashboardPage({ session }) {
   useEffect(() => { loadDecks(); }, []);
 
   async function loadDecks() {
-    const { data } = await supabase.from('decks').select('*, cards(count, acs_score, times_correct, times_incorrect)').order('created_at', { ascending: false });
+    const { data } = await supabase.from('decks').select('*, cards(count, acs_score, times_correct, times_incorrect)').eq('user_id', session.user.id).order('created_at', { ascending: false });
     setDecks(data ?? []);
     setLoading(false);
   }
