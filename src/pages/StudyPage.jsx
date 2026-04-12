@@ -521,7 +521,7 @@ function WrongReview({ cards, allCards, onDone }) {
 const PAUSED_KEY = 'textstudy_paused_session';
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export default function StudyPage() {
+export default function StudyPage({ session }) {
   const [phase, setPhase] = useState('pick');
   const [sessionCards, setSessionCards] = useState([]);
   const [allCards, setAllCards] = useState([]);
