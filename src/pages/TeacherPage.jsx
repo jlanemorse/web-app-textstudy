@@ -29,7 +29,7 @@ function generateCode() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function StudentRow({ student, sessions, decks, onExpand, expanded }) {
+function StudentRow({ student, sessions, decks, pushedDecks, studentDecks, onExpand, expanded }) {
   const mySessions = sessions.filter(s => s.user_id === student.id);
   const chillMs = mySessions.filter(s => s.mode === 'chill')
     .reduce((sum, s) => sum + (s.duration_ms ?? 0), 0);
@@ -90,6 +90,22 @@ function StudentRow({ student, sessions, decks, onExpand, expanded }) {
 
       {expanded && (
         <div style={sr.expanded}>
+          {pushedDecks.length > 0 && (
+            <div style={sr.downloadedSection}>
+              <p style={sr.downloadedTitle}>📥 Pushed Decks</p>
+              <div style={sr.downloadedList}>
+                {pushedDecks.map(pd => {
+                  const myNames = new Set((studentDecks ?? []).filter(d => d.user_id === student.id).map(d => d.name));
+                  const has = myNames.has(pd.name);
+                  return (
+                    <span key={pd.id} style={{ ...sr.downloadedChip, ...(has ? sr.chipYes : sr.chipNo) }}>
+                      {has ? '✓' : '✗'} {pd.name}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {deckRows.length === 0 ? (
             <p style={sr.noDecks}>No sessions yet.</p>
           ) : (
@@ -143,6 +159,12 @@ const sr = {
   td: { padding: '8px 12px', color: '#374151', fontWeight: 600 },
   tdNum: { padding: '8px 12px', color: '#374151', fontWeight: 700, textAlign: 'center' },
   trEven: { background: '#F9FAFB' },
+  downloadedSection: { marginBottom: 14 },
+  downloadedTitle: { fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 },
+  downloadedList: { display: 'flex', flexWrap: 'wrap', gap: 6 },
+  downloadedChip: { fontSize: 12, fontWeight: 700, borderRadius: 20, padding: '4px 12px' },
+  chipYes: { background: '#DCFCE7', color: '#16A34A' },
+  chipNo: { background: '#FEE2E2', color: '#DC2626' },
 };
 
 // ── Class Detail View ─────────────────────────────────────────────────────────
@@ -151,6 +173,8 @@ function ClassDetail({ cls, session, onBack }) {
   const [members, setMembers] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [decks, setDecks] = useState([]);
+  const [pushedDecksList, setPushedDecksList] = useState([]);
+  const [studentDecks, setStudentDecks] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -204,6 +228,22 @@ function ClassDetail({ cls, session, onBack }) {
           : 0,
       }));
       setSessions(enriched);
+    }
+
+    // Get pushed decks for this class (with names)
+    const { data: classDecksData } = await supabase
+      .from('class_decks')
+      .select('deck_id, decks(id, name)')
+      .eq('class_id', cls.id);
+    setPushedDecksList((classDecksData ?? []).map(cd => ({ id: cd.deck_id, name: cd.decks?.name })).filter(d => d.name));
+
+    // Get all decks belonging to students in this class
+    if (studentIds.length > 0) {
+      const { data: stuDecksData } = await supabase
+        .from('decks')
+        .select('id, name, user_id')
+        .in('user_id', studentIds);
+      setStudentDecks(stuDecksData ?? []);
     }
 
     // Get teacher's decks
@@ -326,6 +366,8 @@ function ClassDetail({ cls, session, onBack }) {
               student={member}
               sessions={sessions}
               decks={decks}
+              pushedDecks={pushedDecksList}
+              studentDecks={studentDecks}
               expanded={expandedId === member.id}
               onExpand={() => setExpandedId(expandedId === member.id ? null : member.id)}
             />
