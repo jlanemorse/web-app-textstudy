@@ -36,22 +36,37 @@ async function updateCardScore(cardId, correct, speedTier = null) {
   }).eq('id', cardId);
 }
 
+// ── Progress dots ─────────────────────────────────────────────────────────────
+function ProgressDots({ results, total }) {
+  const dots = Array.from({ length: total }, (_, i) => results[i] ?? 'pending');
+  const maxVisible = 40;
+  const visible = dots.slice(0, maxVisible);
+  return (
+    <div style={pd.wrap}>
+      {visible.map((r, i) => (
+        <div key={i} style={{ ...pd.dot, background: r === 'correct' ? '#22C55E' : r === 'wrong' ? '#EF4444' : '#E5E7EB' }} />
+      ))}
+      {total > maxVisible && <span style={pd.more}>+{total - maxVisible}</span>}
+    </div>
+  );
+}
+const pd = {
+  wrap: { display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 16 },
+  dot: { width: 10, height: 10, borderRadius: 3 },
+  more: { fontSize: 11, color: '#9CA3AF', alignSelf: 'center' },
+};
+
 // ── Deck picker ───────────────────────────────────────────────────────────────
 function DeckPicker({ onStart }) {
   const [decks, setDecks] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [mode, setMode] = useState('chill');
+  const [format, setFormat] = useState('flip');
   const [acsEnabled, setAcsEnabled] = useState(false);
 
   useEffect(() => {
     supabase.from('decks').select('id, name, cards(count)').order('created_at', { ascending: false }).then(({ data }) => setDecks(data ?? []));
   }, []);
-
-  const MODES = [
-    { id: 'chill', emoji: '🃏', label: 'Chill Study', sub: 'Flip cards, mark Got It or Missed It' },
-    { id: 'power', emoji: '⚡', label: 'Power Study', sub: 'Timed countdown — answer fast for bonus points' },
-    { id: 'multiplechoice', emoji: '🔢', label: 'Multiple Choice', sub: '4 options, tap the correct answer' },
-  ];
 
   return (
     <div style={s.page}>
@@ -76,30 +91,43 @@ function DeckPicker({ onStart }) {
 
       <div style={s.section}>
         <label style={s.label}>Mode</label>
-        <div style={s.modeGrid}>
-          {MODES.map(m => (
-            <button key={m.id} style={{ ...s.modeBtn, ...(mode === m.id ? s.modeBtnActive : {}) }} onClick={() => setMode(m.id)}>
-              <span style={s.modeEmoji}>{m.emoji}</span>
-              <span style={s.modeLabel}>{m.label}</span>
-              <span style={s.modeSub}>{m.sub}</span>
-            </button>
-          ))}
+        <div style={s.modeRow}>
+          <button style={{ ...s.modeBtn, ...(mode === 'chill' ? s.modeBtnActive : {}) }} onClick={() => setMode('chill')}>
+            <span style={s.modeEmoji}>🃏</span>
+            <span style={s.modeLabel}>Chill Study</span>
+            <span style={s.modeSub}>Relaxed, go at your own pace</span>
+          </button>
+          <button style={{ ...s.modeBtn, ...(mode === 'power' ? s.modeBtnActive : {}) }} onClick={() => setMode('power')}>
+            <span style={s.modeEmoji}>⚡</span>
+            <span style={s.modeLabel}>Power Study</span>
+            <span style={s.modeSub}>Timed — answer fast for bonus ACS points</span>
+          </button>
         </div>
       </div>
 
-      {(mode === 'chill' || mode === 'power') && (
-        <div style={s.acsRow}>
-          <div>
-            <p style={s.acsTitle}>Adaptive Card Selection</p>
-            <p style={s.acsSub}>Shows cards you get wrong more often</p>
-          </div>
-          <div style={{ ...s.acsToggle, background: acsEnabled ? '#5B4FE9' : '#D1D5DB' }} onClick={() => setAcsEnabled(v => !v)}>
-            <div style={{ ...s.acsThumb, transform: acsEnabled ? 'translateX(22px)' : 'translateX(2px)' }} />
-          </div>
+      <div style={s.section}>
+        <label style={s.label}>Question Format</label>
+        <div style={s.formatRow}>
+          <button style={{ ...s.formatBtn, ...(format === 'flip' ? s.formatBtnActive : {}) }} onClick={() => setFormat('flip')}>
+            Know / Don't Know
+          </button>
+          <button style={{ ...s.formatBtn, ...(format === 'mc' ? s.formatBtnActive : {}) }} onClick={() => setFormat('mc')}>
+            Multiple Choice
+          </button>
         </div>
-      )}
+      </div>
 
-      <button style={{ ...s.startBtn, ...(!selectedId ? s.startBtnDisabled : {}) }} onClick={() => onStart(selectedId, mode, acsEnabled)} disabled={!selectedId}>
+      <div style={s.acsRow}>
+        <div>
+          <p style={s.acsTitle}>Adaptive Card Selection</p>
+          <p style={s.acsSub}>Shows cards you get wrong more often</p>
+        </div>
+        <div style={{ ...s.acsToggle, background: acsEnabled ? '#5B4FE9' : '#D1D5DB' }} onClick={() => setAcsEnabled(v => !v)}>
+          <div style={{ ...s.acsThumb, transform: acsEnabled ? 'translateX(22px)' : 'translateX(2px)' }} />
+        </div>
+      </div>
+
+      <button style={{ ...s.startBtn, ...(!selectedId ? s.startBtnDisabled : {}) }} onClick={() => onStart(selectedId, mode, format, acsEnabled)} disabled={!selectedId}>
         Start Studying
       </button>
     </div>
@@ -107,46 +135,106 @@ function DeckPicker({ onStart }) {
 }
 
 // ── Chill Study session ───────────────────────────────────────────────────────
-function ChillSession({ cards, onDone }) {
+function ChillSession({ cards, allCards, format, onDone, onBack }) {
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [choices, setChoices] = useState(() => format === 'mc' ? buildChoices(cards[0], allCards) : null);
+  const [selected, setSelected] = useState(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongIds, setWrongIds] = useState([]);
+  const [results, setResults] = useState([]);
 
   const card = cards[idx];
 
-  async function handleAnswer(correct) {
-    await updateCardScore(card.id, correct);
-    const newWrongIds = !correct && !wrongIds.includes(card.id) ? [...wrongIds, card.id] : wrongIds;
-    if (!correct) setWrongIds(newWrongIds);
-    const newCorrect = correctCount + (correct ? 1 : 0);
-    if (correct) setCorrectCount(newCorrect);
+  function advance(newWrongIds, newCorrect) {
     if (idx + 1 >= cards.length) {
-      onDone({ correctCount: newCorrect, total: cards.length, wrongIds: newWrongIds, allCards: cards });
+      onDone({ correctCount: newCorrect, total: cards.length, wrongIds: newWrongIds, allCards });
     } else {
       setIdx(i => i + 1);
       setFlipped(false);
+      setSelected(null);
+      if (format === 'mc') setChoices(buildChoices(cards[idx + 1], allCards));
     }
+  }
+
+  async function handleFlipAnswer(correct) {
+    await updateCardScore(card.id, correct);
+    const newWrongIds = !correct && !wrongIds.includes(card.id) ? [...wrongIds, card.id] : wrongIds;
+    const newCorrect = correctCount + (correct ? 1 : 0);
+    const newResults = [...results, correct ? 'correct' : 'wrong'];
+    if (!correct) setWrongIds(newWrongIds);
+    if (correct) setCorrectCount(newCorrect);
+    setResults(newResults);
+    advance(newWrongIds, newCorrect);
+  }
+
+  async function handleMCSelect(choice) {
+    if (selected) return;
+    setSelected(choice.id);
+    const correct = choice.correct;
+    await updateCardScore(card.id, correct);
+    const newWrongIds = !correct && !wrongIds.includes(card.id) ? [...wrongIds, card.id] : wrongIds;
+    const newCorrect = correctCount + (correct ? 1 : 0);
+    const newResults = [...results, correct ? 'correct' : 'wrong'];
+    if (!correct) setWrongIds(newWrongIds);
+    if (correct) setCorrectCount(newCorrect);
+    setResults(newResults);
+  }
+
+  function handleNext() {
+    if (idx + 1 >= cards.length) {
+      onDone({ correctCount, total: cards.length, wrongIds, allCards });
+      return;
+    }
+    setIdx(i => i + 1);
+    setSelected(null);
+    setChoices(buildChoices(cards[idx + 1], allCards));
   }
 
   return (
     <div style={s.sessionWrap}>
-      <div style={s.sessionTop}>
+      <div style={s.sessionHeader}>
+        <button style={s.backBtn} onClick={() => { if (window.confirm('Leave this session?')) onBack(); }}>← Back</button>
         <span style={s.sessionProgress}>{idx + 1} / {cards.length}</span>
-        <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%` }} /></div>
       </div>
+      <ProgressDots results={results} total={cards.length} />
+      <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%` }} /></div>
 
-      <div style={s.flashCard} onClick={() => !flipped && setFlipped(true)}>
-        <p style={s.cardSide}>{flipped ? 'ANSWER' : 'QUESTION'}</p>
-        <p style={s.cardText}>{flipped ? card.back : card.front}</p>
-        {!flipped && <p style={s.tapHint}>Click to reveal answer</p>}
-      </div>
-
-      {flipped && (
-        <div style={s.answerRow}>
-          <button style={s.missedBtn} onClick={() => handleAnswer(false)}>✗ Missed It</button>
-          <button style={s.gotItBtn} onClick={() => handleAnswer(true)}>✓ Got It</button>
-        </div>
+      {format === 'flip' ? (
+        <>
+          <div style={{ ...s.flashCard, marginTop: 20 }} onClick={() => !flipped && setFlipped(true)}>
+            <p style={s.cardSide}>{flipped ? 'ANSWER' : 'QUESTION'}</p>
+            <p style={s.cardText}>{flipped ? card.back : card.front}</p>
+            {!flipped && <p style={s.tapHint}>Click to reveal answer</p>}
+          </div>
+          {flipped && (
+            <div style={s.answerRow}>
+              <button style={s.missedBtn} onClick={() => handleFlipAnswer(false)}>✗ Don't Know</button>
+              <button style={s.gotItBtn} onClick={() => handleFlipAnswer(true)}>✓ Know It</button>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div style={{ ...s.questionCard, marginTop: 20 }}>
+            <p style={s.cardSide}>QUESTION</p>
+            <p style={s.cardText}>{card.front}</p>
+          </div>
+          {choices ? (
+            <div style={s.choicesList}>
+              {choices.map(choice => {
+                let style = s.choiceBtn;
+                if (selected) {
+                  if (choice.correct) style = { ...s.choiceBtn, ...s.choiceCorrect };
+                  else if (choice.id === selected) style = { ...s.choiceBtn, ...s.choiceWrong };
+                  else style = { ...s.choiceBtn, opacity: 0.4 };
+                }
+                return <button key={choice.id} style={style} onClick={() => handleMCSelect(choice)}>{choice.text}</button>;
+              })}
+            </div>
+          ) : <p style={{ color: '#9CA3AF', textAlign: 'center' }}>Need at least 4 cards for multiple choice.</p>}
+          {selected && <button style={s.nextBtn} onClick={handleNext}>{idx + 1 < cards.length ? 'Next →' : 'Finish'}</button>}
+        </>
       )}
     </div>
   );
@@ -155,38 +243,34 @@ function ChillSession({ cards, onDone }) {
 // ── Power Study session ───────────────────────────────────────────────────────
 const POWER_TIME = 5;
 
-function PowerSession({ cards, allCards, onDone }) {
+function PowerSession({ cards, allCards, format, onDone, onBack }) {
   const [idx, setIdx] = useState(0);
-  const [choices, setChoices] = useState(() => buildChoices(cards[0], allCards));
+  const [flipped, setFlipped] = useState(false);
+  const [choices, setChoices] = useState(() => format === 'mc' ? buildChoices(cards[0], allCards) : null);
   const [selected, setSelected] = useState(null);
   const [timeLeft, setTimeLeft] = useState(POWER_TIME);
+  const [timerRunning, setTimerRunning] = useState(true); // eslint-disable-line
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongIds, setWrongIds] = useState([]);
+  const [results, setResults] = useState([]);
   const timerRef = useRef(null);
   const startTimeRef = useRef(Date.now());
-
-  const card = cards[idx];
 
   useEffect(() => {
     startTimeRef.current = Date.now();
     setTimeLeft(POWER_TIME);
+    setTimerRunning(true);
     timerRef.current = setInterval(() => {
       setTimeLeft(t => {
-        if (t <= 0.1) {
-          clearInterval(timerRef.current);
-          return 0;
-        }
+        if (t <= 0.1) { clearInterval(timerRef.current); return 0; }
         return +(t - 0.1).toFixed(1);
       });
     }, 100);
     return () => clearInterval(timerRef.current);
   }, [idx]);
 
-  // Auto-submit when time runs out
   useEffect(() => {
-    if (timeLeft === 0 && selected === null) {
-      handleSelect(null);
-    }
+    if (timeLeft === 0 && selected === null && !flipped) handleAnswer(null);
   }, [timeLeft]);
 
   function speedTier() {
@@ -196,151 +280,109 @@ function PowerSession({ cards, allCards, onDone }) {
     return 'slow';
   }
 
-  async function handleSelect(choice) {
+  function handleFlip() {
+    if (flipped) return;
+    clearInterval(timerRef.current);
+    setTimerRunning(false);
+    setFlipped(true);
+  }
+
+  async function handleAnswer(choice) {
     if (selected !== null) return;
     clearInterval(timerRef.current);
     const correct = choice?.correct ?? false;
     const tier = correct ? speedTier() : null;
     const choiceId = choice?.id ?? 'timeout';
     setSelected(choiceId);
-    await updateCardScore(card.id, correct, tier);
-    const newWrongIds = !correct && !wrongIds.includes(card.id) ? [...wrongIds, card.id] : wrongIds;
-    if (!correct) setWrongIds(newWrongIds);
+    await updateCardScore(cards[idx].id, correct, tier);
+    const newWrongIds = !correct && !wrongIds.includes(cards[idx].id) ? [...wrongIds, cards[idx].id] : wrongIds;
     const newCorrect = correctCount + (correct ? 1 : 0);
+    const newResults = [...results, correct ? 'correct' : 'wrong'];
+    if (!correct) setWrongIds(newWrongIds);
     if (correct) setCorrectCount(newCorrect);
+    setResults(newResults);
 
     setTimeout(() => {
-      const nextIdx = idx + 1;
-      if (nextIdx >= cards.length) {
+      if (idx + 1 >= cards.length) {
         onDone({ correctCount: newCorrect, total: cards.length, wrongIds: newWrongIds, allCards });
         return;
       }
-      setIdx(nextIdx);
-      setChoices(buildChoices(cards[nextIdx], allCards));
+      setIdx(i => i + 1);
+      setFlipped(false);
       setSelected(null);
+      if (format === 'mc') setChoices(buildChoices(cards[idx + 1], allCards));
     }, 1000);
   }
 
-  if (!choices) return (
-    <div style={s.sessionWrap}>
-      <p style={{ textAlign: 'center', color: '#6B7280', marginTop: 40 }}>Need at least 4 cards for Power Study.</p>
-    </div>
-  );
-
   const timerPct = (timeLeft / POWER_TIME) * 100;
   const timerColor = timeLeft > 3 ? '#22C55E' : timeLeft > 1.5 ? '#F59E0B' : '#EF4444';
-
-  return (
-    <div style={s.sessionWrap}>
-      <div style={s.sessionTop}>
-        <div style={s.powerTopRow}>
-          <span style={s.sessionProgress}>{idx + 1} / {cards.length}</span>
-          <span style={{ ...s.timerText, color: timerColor }}>⚡ {timeLeft.toFixed(1)}s</span>
-        </div>
-        <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%` }} /></div>
-        <div style={{ ...s.timerBar, marginTop: 6 }}><div style={{ ...s.timerFill, width: `${timerPct}%`, background: timerColor }} /></div>
-      </div>
-
-      <div style={s.questionCard}>
-        <p style={s.cardSide}>QUESTION</p>
-        <p style={s.cardText}>{card.front}</p>
-      </div>
-
-      <div style={s.choicesList}>
-        {choices.map(choice => {
-          let style = s.choiceBtn;
-          if (selected !== null) {
-            if (choice.correct) style = { ...s.choiceBtn, ...s.choiceCorrect };
-            else if (choice.id === selected) style = { ...s.choiceBtn, ...s.choiceWrong };
-            else style = { ...s.choiceBtn, opacity: 0.4 };
-          }
-          return (
-            <button key={choice.id} style={style} onClick={() => handleSelect(choice)} disabled={selected !== null}>
-              {choice.text}
-            </button>
-          );
-        })}
-      </div>
-
-      {selected !== null && (
-        <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 8 }}>
-          {choices.find(c => c.correct && c.id === selected) ? (
-            timeLeft > 3 ? '⚡ Fast! +2 points' : '✓ Correct! +1 point'
-          ) : selected === 'timeout' ? '⏰ Time\'s up! -1 point' : '✗ Wrong. -1 point'}
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ── Multiple choice session ────────────────────────────────────────────────────
-function MCSession({ cards, onDone }) {
-  const [idx, setIdx] = useState(0);
-  const [choices, setChoices] = useState(() => buildChoices(cards[0], cards));
-  const [selected, setSelected] = useState(null);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [wrongIds, setWrongIds] = useState([]);
-
   const card = cards[idx];
 
-  async function handleSelect(choice) {
-    if (selected) return;
-    setSelected(choice.id);
-    const correct = choice.correct;
-    await updateCardScore(card.id, correct);
-    if (!correct) setWrongIds(prev => [...prev, card.id]);
-    if (correct) setCorrectCount(c => c + 1);
-  }
-
-  function handleNext() {
-    const nextIdx = idx + 1;
-    if (nextIdx >= cards.length) {
-      onDone({ correctCount, total: cards.length, wrongIds, allCards: cards });
-      return;
-    }
-    setIdx(nextIdx);
-    setChoices(buildChoices(cards[nextIdx], cards));
-    setSelected(null);
-  }
-
-  if (!choices) return (
-    <div style={s.sessionWrap}>
-      <p style={{ textAlign: 'center', color: '#6B7280', marginTop: 40 }}>Not enough cards for multiple choice — need at least 4.</p>
-    </div>
-  );
-
   return (
     <div style={s.sessionWrap}>
-      <div style={s.sessionTop}>
-        <span style={s.sessionProgress}>{idx + 1} / {cards.length}</span>
-        <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%` }} /></div>
+      <div style={s.sessionHeader}>
+        <button style={s.backBtn} onClick={() => { if (window.confirm('Leave this session?')) onBack(); }}>← Back</button>
+        <div style={s.powerTopRight}>
+          <span style={{ ...s.timerText, color: timerColor }}>⚡ {timeLeft.toFixed(1)}s</span>
+          <span style={s.sessionProgress}>{idx + 1} / {cards.length}</span>
+        </div>
       </div>
+      <ProgressDots results={results} total={cards.length} />
+      <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%` }} /></div>
+      <div style={{ ...s.timerBar, marginTop: 6 }}><div style={{ ...s.timerFill, width: `${timerPct}%`, background: timerColor }} /></div>
 
-      <div style={s.questionCard}>
-        <p style={s.cardSide}>QUESTION</p>
-        <p style={s.cardText}>{card.front}</p>
-      </div>
-
-      <div style={s.choicesList}>
-        {choices.map(choice => {
-          let style = s.choiceBtn;
-          if (selected) {
-            if (choice.correct) style = { ...s.choiceBtn, ...s.choiceCorrect };
-            else if (choice.id === selected) style = { ...s.choiceBtn, ...s.choiceWrong };
-            else style = { ...s.choiceBtn, opacity: 0.4 };
-          }
-          return (
-            <button key={choice.id} style={style} onClick={() => handleSelect(choice)}>
-              {choice.text}
-            </button>
-          );
-        })}
-      </div>
-
-      {selected && (
-        <button style={s.nextBtn} onClick={handleNext}>
-          {idx + 1 < cards.length ? 'Next →' : 'Finish'}
-        </button>
+      {format === 'flip' ? (
+        <>
+          <div style={{ ...s.flashCard, marginTop: 16 }} onClick={handleFlip}>
+            <p style={s.cardSide}>{flipped ? 'ANSWER' : 'QUESTION'}</p>
+            <p style={s.cardText}>{flipped ? card.back : card.front}</p>
+            {!flipped && <p style={s.tapHint}>Click to reveal — timer stops on flip</p>}
+          </div>
+          {flipped && selected === null && (
+            <div style={s.answerRow}>
+              <button style={s.missedBtn} onClick={() => handleAnswer(null)}>✗ Don't Know</button>
+              <button style={s.gotItBtn} onClick={() => handleAnswer({ correct: true })}>✓ Know It</button>
+            </div>
+          )}
+          {selected !== null && (
+            <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 12 }}>
+              {selected !== 'timeout' && choices?.find?.(c => c.correct && c.id === selected)
+                ? (speedTier() === 'fast' ? '⚡ Fast! +2 points' : '✓ Correct! +1 point')
+                : selected === 'timeout' ? "⏰ Time's up! -1 point" : '✗ Wrong. -1 point'}
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <div style={{ ...s.questionCard, marginTop: 16 }}>
+            <p style={s.cardSide}>QUESTION</p>
+            <p style={s.cardText}>{card.front}</p>
+          </div>
+          {choices ? (
+            <div style={s.choicesList}>
+              {choices.map(choice => {
+                let style = s.choiceBtn;
+                if (selected !== null) {
+                  if (choice.correct) style = { ...s.choiceBtn, ...s.choiceCorrect };
+                  else if (choice.id === selected) style = { ...s.choiceBtn, ...s.choiceWrong };
+                  else style = { ...s.choiceBtn, opacity: 0.4 };
+                }
+                return (
+                  <button key={choice.id} style={style} onClick={() => handleAnswer(choice)} disabled={selected !== null}>
+                    {choice.text}
+                  </button>
+                );
+              })}
+            </div>
+          ) : <p style={{ color: '#9CA3AF', textAlign: 'center' }}>Need at least 4 cards for multiple choice.</p>}
+          {selected !== null && (
+            <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 8 }}>
+              {choices?.find(c => c.correct && c.id === selected)
+                ? (speedTier() === 'fast' ? '⚡ Fast! +2 points' : '✓ Correct! +1 point')
+                : selected === 'timeout' ? "⏰ Time's up! -1 point" : '✗ Wrong. -1 point'}
+            </p>
+          )}
+        </>
       )}
     </div>
   );
@@ -372,6 +414,7 @@ function WrongReview({ cards, allCards, onDone }) {
   const [idx, setIdx] = useState(0);
   const [choices, setChoices] = useState(() => buildChoices(cards[0], allCards));
   const [selected, setSelected] = useState(null);
+  const [results, setResults] = useState([]);
   const [done, setDone] = useState(false);
 
   if (done) return (
@@ -394,11 +437,13 @@ function WrongReview({ cards, allCards, onDone }) {
 
   return (
     <div style={s.sessionWrap}>
-      <div style={s.sessionTop}>
-        <span style={{ ...s.sessionProgress, color: '#EF4444' }}>Wrong Answer Review · {idx + 1} / {cards.length}</span>
-        <div style={{ ...s.progressBar, background: '#FECACA' }}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%`, background: '#EF4444' }} /></div>
+      <div style={s.sessionHeader}>
+        <span style={{ ...s.sessionProgress, color: '#EF4444' }}>Wrong Answer Review</span>
+        <span style={{ ...s.sessionProgress, color: '#EF4444' }}>{idx + 1} / {cards.length}</span>
       </div>
-      <div style={{ ...s.questionCard, borderLeftColor: '#EF4444' }}>
+      <ProgressDots results={results} total={cards.length} />
+      <div style={{ ...s.progressBar, background: '#FECACA' }}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%`, background: '#EF4444' }} /></div>
+      <div style={{ ...s.questionCard, marginTop: 16, borderLeftColor: '#EF4444' }}>
         <p style={s.cardSide}>QUESTION</p>
         <p style={s.cardText}>{card.front}</p>
       </div>
@@ -411,7 +456,14 @@ function WrongReview({ cards, allCards, onDone }) {
               else if (choice.id === selected) style = { ...s.choiceBtn, ...s.choiceWrong };
               else style = { ...s.choiceBtn, opacity: 0.4 };
             }
-            return <button key={choice.id} style={style} onClick={() => { if (!selected) setSelected(choice.id); }}>{choice.text}</button>;
+            return (
+              <button key={choice.id} style={style} onClick={() => {
+                if (!selected) {
+                  setSelected(choice.id);
+                  setResults(r => [...r, choice.correct ? 'correct' : 'wrong']);
+                }
+              }}>{choice.text}</button>
+            );
           })}
         </div>
       ) : <p style={{ color: '#9CA3AF', textAlign: 'center', marginTop: 20 }}>Not enough cards for choices.</p>}
@@ -426,15 +478,17 @@ export default function StudyPage() {
   const [sessionCards, setSessionCards] = useState([]);
   const [allCards, setAllCards] = useState([]);
   const [mode, setMode] = useState('chill');
+  const [format, setFormat] = useState('flip');
   const [result, setResult] = useState(null);
 
-  async function handleStart(deckId, selectedMode, acsEnabled) {
+  async function handleStart(deckId, selectedMode, selectedFormat, acsEnabled) {
     const { data } = await supabase.from('cards').select('*').eq('deck_id', deckId);
     if (!data?.length) { alert('This deck has no cards yet.'); return; }
     const cards = acsEnabled ? buildAcsDeck(data) : shuffle(data);
     setAllCards(data);
     setSessionCards(cards);
     setMode(selectedMode);
+    setFormat(selectedFormat);
     setPhase('session');
   }
 
@@ -446,9 +500,8 @@ export default function StudyPage() {
     const wrongCards = result.wrongIds.map(id => result.allCards.find(c => c.id === id)).filter(Boolean);
     return <WrongReview cards={wrongCards} allCards={result.allCards} onDone={() => setPhase('pick')} />;
   }
-  if (mode === 'chill') return <ChillSession cards={sessionCards} onDone={handleDone} />;
-  if (mode === 'power') return <PowerSession cards={sessionCards} allCards={allCards} onDone={handleDone} />;
-  return <MCSession cards={sessionCards} onDone={handleDone} />;
+  if (mode === 'chill') return <ChillSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={() => setPhase('pick')} />;
+  return <PowerSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={() => setPhase('pick')} />;
 }
 
 const PURPLE = '#5B4FE9';
@@ -466,12 +519,17 @@ const s = {
   deckOptionActive: { borderColor: PURPLE, background: '#EEF2FF', color: PURPLE },
   deckCount: { marginLeft: 'auto', fontSize: 12, color: '#9CA3AF', fontWeight: 600 },
   check: { fontSize: 16, color: PURPLE },
-  modeGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 },
-  modeBtn: { display: 'flex', flexDirection: 'column', gap: 4, padding: '16px 14px', borderRadius: 14, border: '1.5px solid #E5E7EB', background: '#fff', cursor: 'pointer', textAlign: 'left' },
+
+  modeRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+  modeBtn: { display: 'flex', flexDirection: 'column', gap: 4, padding: '18px 16px', borderRadius: 14, border: '1.5px solid #E5E7EB', background: '#fff', cursor: 'pointer', textAlign: 'left' },
   modeBtnActive: { borderColor: PURPLE, background: '#EEF2FF' },
-  modeEmoji: { fontSize: 22, marginBottom: 4 },
-  modeLabel: { fontSize: 14, fontWeight: 700, color: '#1A1A2E' },
-  modeSub: { fontSize: 11, color: '#9CA3AF', lineHeight: 1.4 },
+  modeEmoji: { fontSize: 24, marginBottom: 4 },
+  modeLabel: { fontSize: 15, fontWeight: 700, color: '#1A1A2E' },
+  modeSub: { fontSize: 12, color: '#9CA3AF', lineHeight: 1.4 },
+
+  formatRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  formatBtn: { padding: '12px 0', borderRadius: 12, border: '1.5px solid #E5E7EB', background: '#fff', fontSize: 14, fontWeight: 700, color: '#374151', cursor: 'pointer' },
+  formatBtnActive: { borderColor: PURPLE, background: '#EEF2FF', color: PURPLE },
 
   acsRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderRadius: 14, padding: '16px 18px', marginBottom: 20, border: '1.5px solid #E5E7EB' },
   acsTitle: { fontSize: 14, fontWeight: 700, color: '#1A1A2E', marginBottom: 2 },
@@ -482,15 +540,17 @@ const s = {
   startBtn: { width: '100%', padding: '16px 0', borderRadius: 14, background: PURPLE, color: '#fff', fontSize: 16, fontWeight: 800, border: 'none', cursor: 'pointer', boxShadow: '0 4px 16px rgba(91,79,233,0.35)' },
   startBtnDisabled: { opacity: 0.4, boxShadow: 'none' },
 
-  sessionWrap: { maxWidth: 600, margin: '0 auto', padding: '36px 24px' },
-  sessionTop: { marginBottom: 24 },
-  powerTopRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  sessionProgress: { fontSize: 14, fontWeight: 700, color: PURPLE, display: 'block', marginBottom: 8 },
+  sessionWrap: { maxWidth: 600, margin: '0 auto', padding: '24px 24px' },
+  sessionHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  backBtn: { fontSize: 14, fontWeight: 700, color: PURPLE, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0' },
+  sessionProgress: { fontSize: 14, fontWeight: 700, color: PURPLE },
+  powerTopRight: { display: 'flex', alignItems: 'center', gap: 16 },
+  timerText: { fontSize: 16, fontWeight: 900 },
+
   progressBar: { height: 6, background: '#E5E7EB', borderRadius: 4 },
   progressFill: { height: 6, background: PURPLE, borderRadius: 4, transition: 'width 0.3s' },
   timerBar: { height: 5, background: '#E5E7EB', borderRadius: 4 },
   timerFill: { height: 5, borderRadius: 4, transition: 'width 0.1s linear' },
-  timerText: { fontSize: 16, fontWeight: 900 },
 
   flashCard: { background: '#fff', borderRadius: 20, padding: 36, minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', cursor: 'pointer', marginBottom: 24, textAlign: 'center' },
   questionCard: { background: '#fff', borderRadius: 20, padding: 28, minHeight: 140, display: 'flex', flexDirection: 'column', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', marginBottom: 16, borderLeft: `4px solid ${PURPLE}` },
