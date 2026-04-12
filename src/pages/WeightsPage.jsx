@@ -41,8 +41,9 @@ export default function WeightsPage({ session }) {
 
   const allCards = Object.values(cardsByDeck).flat();
   const seenCards = allCards.filter(c => (c.times_correct ?? 0) + (c.times_incorrect ?? 0) > 0);
-  const positiveCount = seenCards.filter(c => (c.acs_score ?? 0) > 0).length;
-  const negativeCount = seenCards.filter(c => (c.acs_score ?? 0) < 0).length;
+  const knowWellCount = seenCards.filter(c => (c.acs_score ?? 0) >= 2).length;
+  const needsWorkCount = seenCards.filter(c => (c.acs_score ?? 0) < 0).length;
+  const neutralCount = seenCards.filter(c => (c.acs_score ?? 0) >= 0 && (c.acs_score ?? 0) < 2).length;
 
   if (loading) return <div style={s.loading}>Loading…</div>;
 
@@ -53,10 +54,9 @@ export default function WeightsPage({ session }) {
 
       <div style={s.summaryRow}>
         {[
-          { label: 'Total', value: allCards.length, color: '#1A1A2E' },
-          { label: 'Positive', value: positiveCount, color: '#16A34A' },
-          { label: 'Negative', value: negativeCount, color: '#DC2626' },
-          { label: 'Unseen', value: allCards.length - seenCards.length, color: '#6B7280' },
+          { label: 'Needs Work', value: needsWorkCount, color: '#DC2626' },
+          { label: 'Neutral', value: neutralCount, color: '#6B7280' },
+          { label: 'Know Well', value: knowWellCount, color: '#16A34A' },
         ].map(item => (
           <div key={item.label} style={s.summaryBox}>
             <p style={{ ...s.summaryNum, color: item.color }}>{item.value}</p>
@@ -72,7 +72,21 @@ export default function WeightsPage({ session }) {
         return (
           <div key={deck.id} style={s.section}>
             <div style={s.deckHeader}>
-              <p style={s.deckName}>{deck.name}</p>
+              <div style={s.deckNameRow}>
+                <p style={s.deckName}>{deck.name}</p>
+                <div style={s.deckPills}>
+                  {(() => {
+                    const nw = cards.filter(c => (c.acs_score ?? 0) < 0).length;
+                    const nt = cards.filter(c => (c.acs_score ?? 0) >= 0 && (c.acs_score ?? 0) < 2).length;
+                    const kw = cards.filter(c => (c.acs_score ?? 0) >= 2).length;
+                    return <>
+                      {nw > 0 && <span style={{ ...s.deckPillNum, color: '#DC2626' }}>{nw}</span>}
+                      {nt > 0 && <span style={{ ...s.deckPillNum, color: '#6B7280' }}>{nt}</span>}
+                      {kw > 0 && <span style={{ ...s.deckPillNum, color: '#16A34A' }}>{kw}</span>}
+                    </>;
+                  })()}
+                </div>
+              </div>
               <button style={s.resetBtn} onClick={() => handleReset(deck)}>Reset</button>
             </div>
             {sorted.map(card => {
@@ -120,7 +134,10 @@ const s = {
   summaryLabel: { fontSize: 12, fontWeight: 600, color: '#9CA3AF' },
   section: { marginBottom: 28 },
   deckHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  deckNameRow: { display: 'flex', alignItems: 'center', gap: 8 },
   deckName: { fontSize: 13, fontWeight: 800, color: '#5B4FE9', textTransform: 'uppercase', letterSpacing: '0.8px' },
+  deckPills: { display: 'flex', gap: 6, alignItems: 'center' },
+  deckPillNum: { fontSize: 13, fontWeight: 900 },
   resetBtn: { padding: '5px 12px', borderRadius: 8, background: '#FEE2E2', color: '#DC2626', fontSize: 12, fontWeight: 800, border: 'none', cursor: 'pointer' },
   cardRow: { display: 'flex', alignItems: 'center', background: '#fff', borderRadius: 12, padding: '14px 16px', marginBottom: 8, boxShadow: '0 1px 6px rgba(0,0,0,0.05)', gap: 16 },
   cardLeft: { flex: 1 },

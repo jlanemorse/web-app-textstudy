@@ -10,7 +10,7 @@ export default function DashboardPage({ session }) {
   useEffect(() => { loadDecks(); }, []);
 
   async function loadDecks() {
-    const { data } = await supabase.from('decks').select('*, cards(count)').order('created_at', { ascending: false });
+    const { data } = await supabase.from('decks').select('*, cards(count, acs_score, times_correct, times_incorrect)').order('created_at', { ascending: false });
     setDecks(data ?? []);
     setLoading(false);
   }
@@ -50,11 +50,23 @@ export default function DashboardPage({ session }) {
         <div style={s.grid}>
           {decks.map(deck => {
             const count = deck.cards?.[0]?.count ?? 0;
+            const cards = deck.cards ?? [];
+            const seen = cards.filter(c => (c.times_correct ?? 0) + (c.times_incorrect ?? 0) > 0);
+            const needsWork = seen.filter(c => (c.acs_score ?? 0) < 0).length;
+            const neutral = seen.filter(c => (c.acs_score ?? 0) >= 0 && (c.acs_score ?? 0) < 2).length;
+            const knowWell = seen.filter(c => (c.acs_score ?? 0) >= 2).length;
             return (
               <div key={deck.id} style={s.deckCard}>
                 <div style={s.deckCardInner} onClick={() => navigate(`/deck/${deck.id}`)}>
                   <h2 style={s.deckName}>{deck.name}</h2>
                   <p style={s.deckMeta}>{count} card{count !== 1 ? 's' : ''}</p>
+                  {(needsWork + neutral + knowWell) > 0 && (
+                    <div style={s.pillRow}>
+                      {needsWork > 0 && <span style={{ ...s.pill, background: '#FEE2E2', color: '#DC2626' }}>⚠ {needsWork} Needs Work</span>}
+                      {neutral > 0 && <span style={{ ...s.pill, background: '#F3F4F6', color: '#6B7280' }}>◎ {neutral} Neutral</span>}
+                      {knowWell > 0 && <span style={{ ...s.pill, background: '#DCFCE7', color: '#16A34A' }}>✓ {knowWell} Know Well</span>}
+                    </div>
+                  )}
                 </div>
                 <div style={s.deckActions}>
                   <button style={s.editBtn} onClick={() => navigate(`/deck/${deck.id}`)}>Edit</button>
@@ -81,6 +93,8 @@ const s = {
   deckCardInner: { padding: 24, flex: 1, cursor: 'pointer' },
   deckName: { fontSize: 18, fontWeight: 800, color: '#1A1A2E', marginBottom: 8 },
   deckMeta: { fontSize: 13, color: '#9CA3AF', fontWeight: 600 },
+  pillRow: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  pill: { borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 700 },
   deckActions: { display: 'flex', borderTop: '1px solid #F3F4F6' },
   editBtn: { flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 700, color: PURPLE, background: 'transparent', border: 'none', borderRight: '1px solid #F3F4F6', cursor: 'pointer' },
   deleteBtn: { flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 700, color: '#EF4444', background: 'transparent', border: 'none', cursor: 'pointer' },
