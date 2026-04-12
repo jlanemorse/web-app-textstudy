@@ -57,7 +57,7 @@ const pd = {
 };
 
 // ── Deck picker ───────────────────────────────────────────────────────────────
-function DeckPicker({ onStart, pausedSession, onResume }) {
+function DeckPicker({ onStart, pausedSession, onResume, onWrongReviewFromPaused, onTogglePausedAcs }) {
   const [decks, setDecks] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [mode, setMode] = useState('chill');
@@ -88,7 +88,20 @@ function DeckPicker({ onStart, pausedSession, onResume }) {
             </div>
           </div>
           <ProgressDots results={pausedSession.results} total={pausedSession.cards.length} />
-          <button style={s.resumeBtn} onClick={onResume}>Resume Session →</button>
+          <div style={s.resumeAcsRow}>
+            <span style={s.resumeAcsLabel}>Adaptive Card Selection</span>
+            <div style={{ ...s.acsToggle, background: pausedSession.acsEnabled ? '#5B4FE9' : '#4B5563' }} onClick={onTogglePausedAcs}>
+              <div style={{ ...s.acsThumb, transform: pausedSession.acsEnabled ? 'translateX(22px)' : 'translateX(2px)' }} />
+            </div>
+          </div>
+          <div style={s.resumeBtns}>
+            {pausedSession.wrongIds?.length > 0 && (
+              <button style={s.resumeWrongBtn} onClick={onWrongReviewFromPaused}>
+                📋 Wrong Answer Review ({pausedSession.wrongIds.length})
+              </button>
+            )}
+            <button style={s.resumeBtn} onClick={onResume}>Resume Session →</button>
+          </div>
         </div>
       )}
 
@@ -516,34 +529,43 @@ export default function StudyPage() {
   const [pausedSession, setPausedSession] = useState(null);
   const [resumeState, setResumeState] = useState(null);
   const [deckName, setDeckName] = useState('');
+  const [acsEnabled, setAcsEnabled] = useState(false);
 
-  async function handleStart(deckId, selectedDeckName, selectedMode, selectedFormat, acsEnabled, cardOrder) {
+  async function handleStart(deckId, selectedDeckName, selectedMode, selectedFormat, acs, cardOrder) {
     const { data } = await supabase.from('cards').select('*').eq('deck_id', deckId).order('created_at');
     if (!data?.length) { alert('This deck has no cards yet.'); return; }
-    const cards = acsEnabled ? buildAcsDeck(data) : cardOrder === 'inorder' ? data : shuffle(data);
+    const cards = acs ? buildAcsDeck(data) : cardOrder === 'inorder' ? data : shuffle(data);
     setAllCards(data);
     setSessionCards(cards);
     setMode(selectedMode);
     setFormat(selectedFormat);
     setDeckName(selectedDeckName);
+    setAcsEnabled(acs);
     setPausedSession(null);
     setResumeState(null);
     setPhase('session');
   }
 
   function handleBack(sessionState) {
-    setPausedSession({ ...sessionState, cards: sessionCards, allCards, mode, format, deckName });
+    setPausedSession({ ...sessionState, cards: sessionCards, allCards, mode, format, deckName, acsEnabled });
     setResumeState(sessionState);
     setPhase('pick');
   }
 
-  function handleResume() {
-    setPhase('session');
+  function handleResume() { setPhase('session'); }
+
+  function handleWrongReviewFromPaused() {
+    setResult({ wrongIds: pausedSession.wrongIds, allCards: pausedSession.allCards, correctCount: pausedSession.correctCount, total: pausedSession.cards.length });
+    setPhase('wrong');
+  }
+
+  function handleTogglePausedAcs() {
+    setPausedSession(prev => ({ ...prev, acsEnabled: !prev.acsEnabled }));
   }
 
   function handleDone(r) { setPausedSession(null); setResumeState(null); setResult(r); setPhase('done'); }
 
-  if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSession={pausedSession} onResume={handleResume} />;
+  if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSession={pausedSession} onResume={handleResume} onWrongReviewFromPaused={handleWrongReviewFromPaused} onTogglePausedAcs={handleTogglePausedAcs} />;
   if (phase === 'done') return <DoneScreen result={result} onRestart={() => setPhase('pick')} onWrongReview={() => setPhase('wrong')} />;
   if (phase === 'wrong') {
     const wrongCards = result.wrongIds.map(id => result.allCards.find(c => c.id === id)).filter(Boolean);
@@ -597,7 +619,11 @@ const s = {
   resumeScore: { textAlign: 'right' },
   resumeScoreNum: { fontSize: 22, fontWeight: 900, color: '#fff' },
   resumeScoreLabel: { fontSize: 11, color: '#6B7280' },
-  resumeBtn: { width: '100%', padding: '12px 0', borderRadius: 12, background: '#5B4FE9', color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', marginTop: 4 },
+  resumeAcsRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  resumeAcsLabel: { fontSize: 12, fontWeight: 600, color: '#9CA3AF' },
+  resumeBtns: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 },
+  resumeBtn: { width: '100%', padding: '12px 0', borderRadius: 12, background: '#5B4FE9', color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer' },
+  resumeWrongBtn: { width: '100%', padding: '12px 0', borderRadius: 12, background: '#7F1D1D', color: '#FCA5A5', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer' },
 
   sessionWrap: { maxWidth: 600, margin: '0 auto', padding: '24px 24px' },
   sessionHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
