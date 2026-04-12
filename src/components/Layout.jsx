@@ -6,9 +6,9 @@ const NAV = [
   { path: '/generate',  emoji: '🤖', label: 'AI Generate' },
   { path: '/paste',     emoji: '📋', label: 'Paste Text' },
   { path: '/quizlet',   emoji: '🌐', label: 'Quizlet Import' },
-  { path: '/study',     emoji: '🎮', label: 'Study' },
-  { path: '/weights',   emoji: '🎯', label: 'Card Difficulty' },
   { path: '/presets',   emoji: '📦', label: 'Preset Decks' },
+  { path: '/weights',   emoji: '🎯', label: 'Card Difficulty' },
+  { path: '/study',     emoji: '🎮', label: 'Study' },
 ];
 
 export default function Layout({ children, session }) {
