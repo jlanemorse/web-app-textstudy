@@ -49,6 +49,13 @@ export default function JoinClassPage({ session }) {
       return;
     }
 
+    // Ensure student has a profile row so teacher can identify them
+    await supabase.from('profiles').upsert({
+      id: session.user.id,
+      role: 'student',
+      display_name: session.user.email,
+    }, { onConflict: 'id' });
+
     const { error } = await supabase
       .from('class_members')
       .insert({ class_id: cls.id, student_id: session.user.id });

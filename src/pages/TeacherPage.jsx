@@ -163,14 +163,29 @@ function ClassDetail({ cls, session, onBack }) {
 
   async function loadData() {
     setLoading(true);
-    // Get members with profiles
+    // Get member IDs
     const { data: membersData } = await supabase
       .from('class_members')
-      .select('student_id, profiles(id, display_name)')
+      .select('student_id')
       .eq('class_id', cls.id);
 
     const studentIds = (membersData ?? []).map(m => m.student_id);
-    const memberProfiles = (membersData ?? []).map(m => ({ id: m.student_id, ...m.profiles }));
+
+    // Fetch profiles separately (may be missing for some students)
+    let profileMap = {};
+    if (studentIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .in('id', studentIds);
+      for (const p of profilesData ?? []) profileMap[p.id] = p;
+    }
+
+    // Build member list — fall back to user id if no profile
+    const memberProfiles = studentIds.map(id => ({
+      id,
+      display_name: profileMap[id]?.display_name || id,
+    }));
     setMembers(memberProfiles);
 
     // Get sessions for all students
