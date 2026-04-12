@@ -518,6 +518,8 @@ function WrongReview({ cards, allCards, onDone }) {
   );
 }
 
+const PAUSED_KEY = 'textstudy_paused_session';
+
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function StudyPage() {
   const [phase, setPhase] = useState('pick');
@@ -526,10 +528,18 @@ export default function StudyPage() {
   const [mode, setMode] = useState('chill');
   const [format, setFormat] = useState('flip');
   const [result, setResult] = useState(null);
-  const [pausedSession, setPausedSession] = useState(null);
+  const [pausedSession, setPausedSession] = useState(() => {
+    try { const s = localStorage.getItem(PAUSED_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [resumeState, setResumeState] = useState(null);
   const [deckName, setDeckName] = useState('');
   const [acsEnabled, setAcsEnabled] = useState(false);
+
+  function savePaused(session) {
+    setPausedSession(session);
+    if (session) localStorage.setItem(PAUSED_KEY, JSON.stringify(session));
+    else localStorage.removeItem(PAUSED_KEY);
+  }
 
   async function handleStart(deckId, selectedDeckName, selectedMode, selectedFormat, acs, cardOrder) {
     const { data } = await supabase.from('cards').select('*').eq('deck_id', deckId).order('created_at');
@@ -541,18 +551,26 @@ export default function StudyPage() {
     setFormat(selectedFormat);
     setDeckName(selectedDeckName);
     setAcsEnabled(acs);
-    setPausedSession(null);
+    savePaused(null);
     setResumeState(null);
     setPhase('session');
   }
 
   function handleBack(sessionState) {
-    setPausedSession({ ...sessionState, cards: sessionCards, allCards, mode, format, deckName, acsEnabled });
+    const saved = { ...sessionState, cards: sessionCards, allCards, mode, format, deckName, acsEnabled };
+    savePaused(saved);
     setResumeState(sessionState);
     setPhase('pick');
   }
 
-  function handleResume() { setPhase('session'); }
+  function handleResume() {
+    setSessionCards(pausedSession.cards);
+    setAllCards(pausedSession.allCards);
+    setMode(pausedSession.mode);
+    setFormat(pausedSession.format);
+    setResumeState({ idx: pausedSession.idx, correctCount: pausedSession.correctCount, wrongIds: pausedSession.wrongIds, results: pausedSession.results });
+    setPhase('session');
+  }
 
   function handleWrongReviewFromPaused() {
     setResult({ wrongIds: pausedSession.wrongIds, allCards: pausedSession.allCards, correctCount: pausedSession.correctCount, total: pausedSession.cards.length });
@@ -560,10 +578,11 @@ export default function StudyPage() {
   }
 
   function handleTogglePausedAcs() {
-    setPausedSession(prev => ({ ...prev, acsEnabled: !prev.acsEnabled }));
+    const updated = { ...pausedSession, acsEnabled: !pausedSession.acsEnabled };
+    savePaused(updated);
   }
 
-  function handleDone(r) { setPausedSession(null); setResumeState(null); setResult(r); setPhase('done'); }
+  function handleDone(r) { savePaused(null); setResumeState(null); setResult(r); setPhase('done'); }
 
   if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSession={pausedSession} onResume={handleResume} onWrongReviewFromPaused={handleWrongReviewFromPaused} onTogglePausedAcs={handleTogglePausedAcs} />;
   if (phase === 'done') return <DoneScreen result={result} onRestart={() => setPhase('pick')} onWrongReview={() => setPhase('wrong')} />;
