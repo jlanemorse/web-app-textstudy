@@ -9,6 +9,8 @@ const NAV = [
   { path: '/presets',   emoji: '📦', label: 'Preset Decks' },
   { path: '/weights',   emoji: '🎯', label: 'Card Difficulty' },
   { path: '/study',     emoji: '🎮', label: 'Study' },
+  { path: '/teacher',   emoji: '👩‍🏫', label: 'Teacher Dashboard' },
+  { path: '/join',      emoji: '🏫', label: 'Join a Class' },
 ];
 
 export default function Layout({ children, session }) {

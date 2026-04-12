@@ -11,6 +11,8 @@ import QuizletImportPage from './pages/QuizletImportPage';
 import StudyPage from './pages/StudyPage';
 import WeightsPage from './pages/WeightsPage';
 import PresetDecksPage from './pages/PresetDecksPage';
+import TeacherPage from './pages/TeacherPage';
+import JoinClassPage from './pages/JoinClassPage';
 
 export default function App() {
   const [session, setSession] = useState(undefined);
@@ -44,6 +46,8 @@ export default function App() {
         <Route path="/study" element={<StudyPage session={session} />} />
         <Route path="/weights" element={<WeightsPage session={session} />} />
         <Route path="/presets" element={<PresetDecksPage session={session} />} />
+        <Route path="/teacher" element={<TeacherPage session={session} />} />
+        <Route path="/join" element={<JoinClassPage session={session} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
