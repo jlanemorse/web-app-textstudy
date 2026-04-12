@@ -10,6 +10,7 @@ import PasteTextPage from './pages/PasteTextPage';
 import QuizletImportPage from './pages/QuizletImportPage';
 import StudyPage from './pages/StudyPage';
 import WeightsPage from './pages/WeightsPage';
+import PresetDecksPage from './pages/PresetDecksPage';
 
 export default function App() {
   const [session, setSession] = useState(undefined);
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/quizlet" element={<QuizletImportPage session={session} />} />
         <Route path="/study" element={<StudyPage session={session} />} />
         <Route path="/weights" element={<WeightsPage session={session} />} />
+        <Route path="/presets" element={<PresetDecksPage session={session} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

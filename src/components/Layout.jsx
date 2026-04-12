@@ -8,6 +8,7 @@ const NAV = [
   { path: '/quizlet',   emoji: '🌐', label: 'Quizlet Import' },
   { path: '/study',     emoji: '🎮', label: 'Study' },
   { path: '/weights',   emoji: '🎯', label: 'Card Difficulty' },
+  { path: '/presets',   emoji: '📦', label: 'Preset Decks' },
 ];
 
 export default function Layout({ children, session }) {
