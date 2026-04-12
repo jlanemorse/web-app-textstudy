@@ -57,7 +57,7 @@ const pd = {
 };
 
 // ── Deck picker ───────────────────────────────────────────────────────────────
-function DeckPicker({ onStart }) {
+function DeckPicker({ onStart, pausedSession, onResume }) {
   const [decks, setDecks] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [mode, setMode] = useState('chill');
@@ -72,6 +72,24 @@ function DeckPicker({ onStart }) {
     <div style={s.page}>
       <h1 style={s.title}>🎮 Study</h1>
       <p style={s.sub}>Pick a deck and a mode to start studying.</p>
+
+      {pausedSession && (
+        <div style={s.resumeCard}>
+          <div style={s.resumeTop}>
+            <div>
+              <p style={s.resumeTitle}>📌 Session In Progress</p>
+              <p style={s.resumeDeck}>{pausedSession.deckName}</p>
+              <p style={s.resumeMeta}>{pausedSession.mode === 'chill' ? '🃏 Chill' : '⚡ Power'} · {pausedSession.format === 'flip' ? 'Know/Don\'t Know' : 'Multiple Choice'}</p>
+            </div>
+            <div style={s.resumeScore}>
+              <p style={s.resumeScoreNum}>{pausedSession.results.filter(r => r === 'correct').length} / {pausedSession.results.length}</p>
+              <p style={s.resumeScoreLabel}>answered</p>
+            </div>
+          </div>
+          <ProgressDots results={pausedSession.results} total={pausedSession.cards.length} />
+          <button style={s.resumeBtn} onClick={onResume}>Resume Session →</button>
+        </div>
+      )}
 
       <div style={s.section}>
         <label style={s.label}>Choose a Deck</label>
@@ -127,7 +145,10 @@ function DeckPicker({ onStart }) {
         </div>
       </div>
 
-      <button style={{ ...s.startBtn, ...(!selectedId ? s.startBtnDisabled : {}) }} onClick={() => onStart(selectedId, mode, format, acsEnabled)} disabled={!selectedId}>
+      <button style={{ ...s.startBtn, ...(!selectedId ? s.startBtnDisabled : {}) }} onClick={() => {
+        const deck = decks.find(d => d.id === selectedId);
+        onStart(selectedId, deck?.name ?? '', mode, format, acsEnabled);
+      }} disabled={!selectedId}>
         Start Studying
       </button>
     </div>
@@ -135,14 +156,14 @@ function DeckPicker({ onStart }) {
 }
 
 // ── Chill Study session ───────────────────────────────────────────────────────
-function ChillSession({ cards, allCards, format, onDone, onBack }) {
-  const [idx, setIdx] = useState(0);
+function ChillSession({ cards, allCards, format, onDone, onBack, initialState }) {
+  const [idx, setIdx] = useState(initialState?.idx ?? 0);
   const [flipped, setFlipped] = useState(false);
-  const [choices, setChoices] = useState(() => format === 'mc' ? buildChoices(cards[0], allCards) : null);
+  const [choices, setChoices] = useState(() => format === 'mc' ? buildChoices(cards[initialState?.idx ?? 0], allCards) : null);
   const [selected, setSelected] = useState(null);
-  const [correctCount, setCorrectCount] = useState(0);
-  const [wrongIds, setWrongIds] = useState([]);
-  const [results, setResults] = useState([]);
+  const [correctCount, setCorrectCount] = useState(initialState?.correctCount ?? 0);
+  const [wrongIds, setWrongIds] = useState(initialState?.wrongIds ?? []);
+  const [results, setResults] = useState(initialState?.results ?? []);
 
   const card = cards[idx];
 
@@ -194,7 +215,7 @@ function ChillSession({ cards, allCards, format, onDone, onBack }) {
   return (
     <div style={s.sessionWrap}>
       <div style={s.sessionHeader}>
-        <button style={s.backBtn} onClick={() => { if (window.confirm('Leave this session?')) onBack(); }}>← Back</button>
+        <button style={s.backBtn} onClick={() => { if (window.confirm('Leave this session?')) onBack({ idx, correctCount, wrongIds, results }); }}>← Back</button>
         <span style={s.sessionProgress}>{idx + 1} / {cards.length}</span>
       </div>
       <ProgressDots results={results} total={cards.length} />
@@ -243,16 +264,15 @@ function ChillSession({ cards, allCards, format, onDone, onBack }) {
 // ── Power Study session ───────────────────────────────────────────────────────
 const POWER_TIME = 5;
 
-function PowerSession({ cards, allCards, format, onDone, onBack }) {
-  const [idx, setIdx] = useState(0);
+function PowerSession({ cards, allCards, format, onDone, onBack, initialState }) {
+  const [idx, setIdx] = useState(initialState?.idx ?? 0);
   const [flipped, setFlipped] = useState(false);
-  const [choices, setChoices] = useState(() => format === 'mc' ? buildChoices(cards[0], allCards) : null);
+  const [choices, setChoices] = useState(() => format === 'mc' ? buildChoices(cards[initialState?.idx ?? 0], allCards) : null);
   const [selected, setSelected] = useState(null);
   const [timeLeft, setTimeLeft] = useState(POWER_TIME);
-  const [timerRunning, setTimerRunning] = useState(true); // eslint-disable-line
-  const [correctCount, setCorrectCount] = useState(0);
-  const [wrongIds, setWrongIds] = useState([]);
-  const [results, setResults] = useState([]);
+  const [correctCount, setCorrectCount] = useState(initialState?.correctCount ?? 0);
+  const [wrongIds, setWrongIds] = useState(initialState?.wrongIds ?? []);
+  const [results, setResults] = useState(initialState?.results ?? []);
   const timerRef = useRef(null);
   const startTimeRef = useRef(Date.now());
 
@@ -321,7 +341,7 @@ function PowerSession({ cards, allCards, format, onDone, onBack }) {
   return (
     <div style={s.sessionWrap}>
       <div style={s.sessionHeader}>
-        <button style={s.backBtn} onClick={() => { if (window.confirm('Leave this session?')) onBack(); }}>← Back</button>
+        <button style={s.backBtn} onClick={() => { if (window.confirm('Leave this session?')) onBack({ idx, correctCount, wrongIds, results }); }}>← Back</button>
         <div style={s.powerTopRight}>
           <span style={{ ...s.timerText, color: timerColor }}>⚡ {timeLeft.toFixed(1)}s</span>
           <span style={s.sessionProgress}>{idx + 1} / {cards.length}</span>
@@ -480,8 +500,11 @@ export default function StudyPage() {
   const [mode, setMode] = useState('chill');
   const [format, setFormat] = useState('flip');
   const [result, setResult] = useState(null);
+  const [pausedSession, setPausedSession] = useState(null);
+  const [resumeState, setResumeState] = useState(null);
+  const [deckName, setDeckName] = useState('');
 
-  async function handleStart(deckId, selectedMode, selectedFormat, acsEnabled) {
+  async function handleStart(deckId, selectedDeckName, selectedMode, selectedFormat, acsEnabled) {
     const { data } = await supabase.from('cards').select('*').eq('deck_id', deckId);
     if (!data?.length) { alert('This deck has no cards yet.'); return; }
     const cards = acsEnabled ? buildAcsDeck(data) : shuffle(data);
@@ -489,19 +512,32 @@ export default function StudyPage() {
     setSessionCards(cards);
     setMode(selectedMode);
     setFormat(selectedFormat);
+    setDeckName(selectedDeckName);
+    setPausedSession(null);
+    setResumeState(null);
     setPhase('session');
   }
 
-  function handleDone(r) { setResult(r); setPhase('done'); }
+  function handleBack(sessionState) {
+    setPausedSession({ ...sessionState, cards: sessionCards, allCards, mode, format, deckName });
+    setResumeState(sessionState);
+    setPhase('pick');
+  }
 
-  if (phase === 'pick') return <DeckPicker onStart={handleStart} />;
+  function handleResume() {
+    setPhase('session');
+  }
+
+  function handleDone(r) { setPausedSession(null); setResumeState(null); setResult(r); setPhase('done'); }
+
+  if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSession={pausedSession} onResume={handleResume} />;
   if (phase === 'done') return <DoneScreen result={result} onRestart={() => setPhase('pick')} onWrongReview={() => setPhase('wrong')} />;
   if (phase === 'wrong') {
     const wrongCards = result.wrongIds.map(id => result.allCards.find(c => c.id === id)).filter(Boolean);
     return <WrongReview cards={wrongCards} allCards={result.allCards} onDone={() => setPhase('pick')} />;
   }
-  if (mode === 'chill') return <ChillSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={() => setPhase('pick')} />;
-  return <PowerSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={() => setPhase('pick')} />;
+  if (mode === 'chill') return <ChillSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={handleBack} initialState={resumeState} />;
+  return <PowerSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={handleBack} initialState={resumeState} />;
 }
 
 const PURPLE = '#5B4FE9';
@@ -539,6 +575,16 @@ const s = {
 
   startBtn: { width: '100%', padding: '16px 0', borderRadius: 14, background: PURPLE, color: '#fff', fontSize: 16, fontWeight: 800, border: 'none', cursor: 'pointer', boxShadow: '0 4px 16px rgba(91,79,233,0.35)' },
   startBtnDisabled: { opacity: 0.4, boxShadow: 'none' },
+
+  resumeCard: { background: '#1A1A2E', borderRadius: 18, padding: '18px 20px', marginBottom: 24, border: '1.5px solid #5B4FE9' },
+  resumeTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  resumeTitle: { fontSize: 12, fontWeight: 800, color: '#A5B4FC', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 },
+  resumeDeck: { fontSize: 17, fontWeight: 800, color: '#fff', marginBottom: 2 },
+  resumeMeta: { fontSize: 12, color: '#6B7280' },
+  resumeScore: { textAlign: 'right' },
+  resumeScoreNum: { fontSize: 22, fontWeight: 900, color: '#fff' },
+  resumeScoreLabel: { fontSize: 11, color: '#6B7280' },
+  resumeBtn: { width: '100%', padding: '12px 0', borderRadius: 12, background: '#5B4FE9', color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', marginTop: 4 },
 
   sessionWrap: { maxWidth: 600, margin: '0 auto', padding: '24px 24px' },
   sessionHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
