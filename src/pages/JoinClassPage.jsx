@@ -10,11 +10,20 @@ export default function JoinClassPage({ session }) {
   useEffect(() => { loadMyClasses(); }, []);
 
   async function loadMyClasses() {
-    const { data } = await supabase
+    const { data: memberData } = await supabase
       .from('class_members')
-      .select('class_id, classes(id, name, code, teacher_id, profiles(display_name))')
+      .select('class_id')
       .eq('student_id', session.user.id);
-    setMyClasses((data ?? []).map(m => m.classes).filter(Boolean));
+
+    const classIds = (memberData ?? []).map(m => m.class_id);
+    if (classIds.length === 0) { setMyClasses([]); return; }
+
+    const { data: classData } = await supabase
+      .from('classes')
+      .select('id, name, code, teacher_id')
+      .in('id', classIds);
+
+    setMyClasses(classData ?? []);
   }
 
   async function handleJoin() {
@@ -120,7 +129,7 @@ export default function JoinClassPage({ session }) {
               <div key={cls.id} style={s.classCard}>
                 <div>
                   <p style={s.className}>{cls.name}</p>
-                  <p style={s.classTeacher}>Teacher: {cls.profiles?.display_name || 'Your teacher'}</p>
+                  <p style={s.classTeacher}>Code: {cls.code}</p>
                 </div>
                 <button style={s.leaveBtn} onClick={() => handleLeave(cls)}>Leave</button>
               </div>
