@@ -10,7 +10,7 @@ export default function DashboardPage({ session }) {
   useEffect(() => { loadDecks(); }, []);
 
   async function loadDecks() {
-    const { data } = await supabase.from('decks').select('*, cards(count, acs_score, times_correct, times_incorrect)').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    const { data } = await supabase.from('decks').select('*, cards(id, acs_score, times_correct, times_incorrect)').eq('user_id', session.user.id).order('created_at', { ascending: false });
     setDecks(data ?? []);
     setLoading(false);
   }
@@ -49,8 +49,8 @@ export default function DashboardPage({ session }) {
       ) : (
         <div style={s.grid}>
           {decks.map(deck => {
-            const count = deck.cards?.[0]?.count ?? 0;
             const cards = deck.cards ?? [];
+            const count = cards.length;
             const seen = cards.filter(c => (c.times_correct ?? 0) + (c.times_incorrect ?? 0) > 0);
             const needsWork = seen.filter(c => (c.acs_score ?? 0) < 0).length;
             const neutral = seen.filter(c => (c.acs_score ?? 0) >= 0 && (c.acs_score ?? 0) < 2).length;

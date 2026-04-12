@@ -66,7 +66,7 @@ function DeckPicker({ onStart, pausedSessions, onResume, onDiscard, onWrongRevie
   const [cardOrder, setCardOrder] = useState('random');
 
   useEffect(() => {
-    supabase.from('decks').select('id, name, cards(count)').eq('user_id', session.user.id).order('created_at', { ascending: false }).then(({ data }) => setDecks(data ?? []));
+    supabase.from('decks').select('id, name, cards(id)').eq('user_id', session.user.id).order('created_at', { ascending: false }).then(({ data }) => setDecks(data ?? []));
   }, []);
 
   return (
@@ -112,7 +112,7 @@ function DeckPicker({ onStart, pausedSessions, onResume, onDiscard, onWrongRevie
         <label style={s.label}>Choose a Deck</label>
         <div style={s.deckList}>
           {decks.map(d => {
-            const count = d.cards?.[0]?.count ?? 0;
+            const count = d.cards?.length ?? 0;
             return (
               <button key={d.id} style={{ ...s.deckOption, ...(selectedId === d.id ? s.deckOptionActive : {}) }} onClick={() => setSelectedId(d.id)}>
                 <span>{d.name}</span>

@@ -93,7 +93,10 @@ export default function DeckEditorPage({ session }) {
       <div style={s.content}>
         <div style={s.topBar}>
           <button style={s.backBtn} onClick={() => navigate('/')}>← My Decks</button>
-          {cards.length > 0 && <button style={s.shareBtn} onClick={() => setShareOpen(true)}>📱 Send to Phone</button>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={s.autoSaveLabel}>✓ Auto-saved</span>
+            {cards.length > 0 && <button style={s.shareBtn} onClick={() => setShareOpen(true)}>📱 Send to Phone</button>}
+          </div>
         </div>
         {/* Deck title */}
         <div style={s.titleRow}>
@@ -229,6 +232,7 @@ const s = {
   page: { minHeight: '100vh', background: '#F4F5F9' },
   nav: { background: '#fff', borderBottom: '1px solid #E5E7EB', padding: '0 32px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 },
   backBtn: { fontSize: 14, fontWeight: 700, color: PURPLE, background: 'transparent', border: 'none', cursor: 'pointer', padding: '8px 0' },
+  autoSaveLabel: { fontSize: 12, fontWeight: 600, color: '#16A34A' },
   navRight: { display: 'flex', gap: 12 },
   shareBtn: { padding: '9px 18px', borderRadius: 10, background: PURPLE, color: '#fff', fontSize: 14, fontWeight: 800, boxShadow: '0 3px 10px rgba(91,79,233,0.3)' },
 
