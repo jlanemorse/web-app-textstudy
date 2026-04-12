@@ -1,6 +1,45 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 
+async function logSessionStart(userId, deckId, deckName, mode) {
+  try {
+    const { data } = await supabase.from('study_sessions').insert({
+      user_id: userId,
+      deck_id: deckId,
+      deck_name: deckName,
+      mode,
+      started_at: new Date().toISOString(),
+      cards_reviewed: 0,
+      cards_correct: 0,
+    }).select().single();
+    return data?.id ?? null;
+  } catch { return null; }
+}
+
+async function logSessionEnd(sessionId, cardsReviewed, cardsCorrect) {
+  if (!sessionId) return;
+  try {
+    await supabase.from('study_sessions').update({
+      ended_at: new Date().toISOString(),
+      cards_reviewed: cardsReviewed,
+      cards_correct: cardsCorrect,
+    }).eq('id', sessionId);
+  } catch {}
+}
+
+async function logCardResult(userId, sessionId, cardId, correct, speedTier) {
+  if (!sessionId) return;
+  try {
+    await supabase.from('card_results').insert({
+      session_id: sessionId,
+      user_id: userId,
+      card_id: cardId,
+      correct,
+      speed_tier: speedTier ?? null,
+    });
+  } catch {}
+}
+
 function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
 
 function buildAcsDeck(cards) {
@@ -185,7 +224,7 @@ function DeckPicker({ onStart, pausedSessions, onResume, onDiscard, onWrongRevie
 }
 
 // ── Chill Study session ───────────────────────────────────────────────────────
-function ChillSession({ cards, allCards, format, onDone, onBack, onEnd, initialState }) {
+function ChillSession({ cards, allCards, format, onDone, onBack, onEnd, onCardResult, initialState }) {
   const [idx, setIdx] = useState(initialState?.idx ?? 0);
   const [flipped, setFlipped] = useState(false);
   const [choices, setChoices] = useState(() => format === 'mc' ? buildChoices(cards[initialState?.idx ?? 0], allCards) : null);
@@ -209,6 +248,7 @@ function ChillSession({ cards, allCards, format, onDone, onBack, onEnd, initialS
 
   async function handleFlipAnswer(correct) {
     await updateCardScore(card.id, correct);
+    onCardResult?.(card.id, correct, null);
     const newWrongIds = !correct && !wrongIds.includes(card.id) ? [...wrongIds, card.id] : wrongIds;
     const newCorrect = correctCount + (correct ? 1 : 0);
     const newResults = [...results, correct ? 'correct' : 'wrong'];
@@ -223,6 +263,7 @@ function ChillSession({ cards, allCards, format, onDone, onBack, onEnd, initialS
     setSelected(choice.id);
     const correct = choice.correct;
     await updateCardScore(card.id, correct);
+    onCardResult?.(card.id, correct, null);
     const newWrongIds = !correct && !wrongIds.includes(card.id) ? [...wrongIds, card.id] : wrongIds;
     const newCorrect = correctCount + (correct ? 1 : 0);
     const newResults = [...results, correct ? 'correct' : 'wrong'];
@@ -294,7 +335,7 @@ function ChillSession({ cards, allCards, format, onDone, onBack, onEnd, initialS
 // ── Power Study session ───────────────────────────────────────────────────────
 const POWER_TIME = 5;
 
-function PowerSession({ cards, allCards, format, onDone, onBack, onEnd, initialState }) {
+function PowerSession({ cards, allCards, format, onDone, onBack, onEnd, onCardResult, initialState }) {
   const [idx, setIdx] = useState(initialState?.idx ?? 0);
   const [flipped, setFlipped] = useState(false);
   const [choices, setChoices] = useState(() => format === 'mc' ? buildChoices(cards[initialState?.idx ?? 0], allCards) : null);
@@ -344,6 +385,7 @@ function PowerSession({ cards, allCards, format, onDone, onBack, onEnd, initialS
     const choiceId = choice?.id ?? 'timeout';
     setSelected(choiceId);
     await updateCardScore(cards[idx].id, correct, tier);
+    onCardResult?.(cards[idx].id, correct, tier);
     const newWrongIds = !correct && !wrongIds.includes(cards[idx].id) ? [...wrongIds, cards[idx].id] : wrongIds;
     const newCorrect = correctCount + (correct ? 1 : 0);
     const newResults = [...results, correct ? 'correct' : 'wrong'];
@@ -552,15 +594,17 @@ export default function StudyPage({ session }) {
   });
   const [resumeState, setResumeState] = useState(null);
   const [deckName, setDeckName] = useState('');
+  const [deckId, setDeckId] = useState(null);
   const [acsEnabled, setAcsEnabled] = useState(false);
+  const studyLogId = useRef(null);
 
   function savePausedList(list) {
     setPausedSessions(list);
     localStorage.setItem(PAUSED_KEY, JSON.stringify(list));
   }
 
-  async function handleStart(deckId, selectedDeckName, selectedMode, selectedFormat, acs, cardOrder) {
-    const { data } = await supabase.from('cards').select('*').eq('deck_id', deckId).order('created_at');
+  async function handleStart(selectedDeckId, selectedDeckName, selectedMode, selectedFormat, acs, cardOrder) {
+    const { data } = await supabase.from('cards').select('*').eq('deck_id', selectedDeckId).order('created_at');
     if (!data?.length) { alert('This deck has no cards yet.'); return; }
     const cards = acs ? buildAcsDeck(data) : cardOrder === 'inorder' ? data : shuffle(data);
     setAllCards(data);
@@ -568,8 +612,10 @@ export default function StudyPage({ session }) {
     setMode(selectedMode);
     setFormat(selectedFormat);
     setDeckName(selectedDeckName);
+    setDeckId(selectedDeckId);
     setAcsEnabled(acs);
     setResumeState(null);
+    studyLogId.current = await logSessionStart(session.user.id, selectedDeckId, selectedDeckName, selectedMode);
     setPhase('session');
   }
 
@@ -610,8 +656,15 @@ export default function StudyPage({ session }) {
     savePausedList(pausedSessions.map(ps => ps.id === id ? { ...ps, acsEnabled: !ps.acsEnabled } : ps));
   }
 
-  function handleDone(r) { setResumeState(null); setResult(r); setPhase('done'); }
-  function handleEnd() { setResumeState(null); setPhase('pick'); }
+  function handleDone(r) {
+    logSessionEnd(studyLogId.current, r.total, r.correctCount);
+    studyLogId.current = null;
+    setResumeState(null); setResult(r); setPhase('done');
+  }
+  function handleEnd() {
+    studyLogId.current = null;
+    setResumeState(null); setPhase('pick');
+  }
 
   if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSessions={pausedSessions} onResume={handleResume} onDiscard={handleDiscard} onWrongReviewFromPaused={handleWrongReviewFromPaused} onTogglePausedAcs={handleTogglePausedAcs} session={session} />;
   if (phase === 'done') return <DoneScreen result={result} onRestart={() => setPhase('pick')} onWrongReview={() => setPhase('wrong')} />;
@@ -619,8 +672,9 @@ export default function StudyPage({ session }) {
     const wrongCards = result.wrongIds.map(id => result.allCards.find(c => c.id === id)).filter(Boolean);
     return <WrongReview cards={wrongCards} allCards={result.allCards} onDone={() => setPhase('pick')} />;
   }
-  if (mode === 'chill') return <ChillSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={handleBack} onEnd={handleEnd} initialState={resumeState} />;
-  return <PowerSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={handleBack} onEnd={handleEnd} initialState={resumeState} />;
+  const onCardResult = (cardId, correct, speedTier) => logCardResult(session.user.id, studyLogId.current, cardId, correct, speedTier);
+  if (mode === 'chill') return <ChillSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={handleBack} onEnd={handleEnd} onCardResult={onCardResult} initialState={resumeState} />;
+  return <PowerSession cards={sessionCards} allCards={allCards} format={format} onDone={handleDone} onBack={handleBack} onEnd={handleEnd} onCardResult={onCardResult} initialState={resumeState} />;
 }
 
 const PURPLE = '#5B4FE9';
