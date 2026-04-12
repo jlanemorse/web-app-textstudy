@@ -90,19 +90,11 @@ export default function DeckEditorPage({ session }) {
 
   return (
     <div style={s.page}>
-      {/* Nav */}
-      <nav style={s.nav}>
-        <button style={s.backBtn} onClick={() => navigate('/')}>← My Decks</button>
-        <div style={s.navRight}>
-          {cards.length > 0 && (
-            <button style={s.shareBtn} onClick={() => setShareOpen(true)}>
-              📱 Send to Phone
-            </button>
-          )}
-        </div>
-      </nav>
-
       <div style={s.content}>
+        <div style={s.topBar}>
+          <button style={s.backBtn} onClick={() => navigate('/')}>← My Decks</button>
+          {cards.length > 0 && <button style={s.shareBtn} onClick={() => setShareOpen(true)}>📱 Send to Phone</button>}
+        </div>
         {/* Deck title */}
         <div style={s.titleRow}>
           {editingName ? (
@@ -241,6 +233,7 @@ const s = {
   shareBtn: { padding: '9px 18px', borderRadius: 10, background: PURPLE, color: '#fff', fontSize: 14, fontWeight: 800, boxShadow: '0 3px 10px rgba(91,79,233,0.3)' },
 
   content: { maxWidth: 760, margin: '0 auto', padding: '32px 24px' },
+  topBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
 
   titleRow: { marginBottom: 24 },
   nameTitleRow: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 4 },

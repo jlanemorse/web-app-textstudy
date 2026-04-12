@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './supabase';
+import Layout from './components/Layout';
 import AuthPage from './pages/AuthPage';
 import DashboardPage from './pages/DashboardPage';
 import DeckEditorPage from './pages/DeckEditorPage';
+import GeneratePage from './pages/GeneratePage';
+import PasteTextPage from './pages/PasteTextPage';
+import QuizletImportPage from './pages/QuizletImportPage';
+import StudyPage from './pages/StudyPage';
+import WeightsPage from './pages/WeightsPage';
 
 export default function App() {
-  const [session, setSession] = useState(undefined); // undefined = loading
+  const [session, setSession] = useState(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -15,20 +21,29 @@ export default function App() {
   }, []);
 
   if (session === undefined) {
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontSize: 40 }}>📚</div>;
+  }
+
+  if (!session) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div style={{ fontSize: 32 }}>📚</div>
-      </div>
+      <Routes>
+        <Route path="*" element={<AuthPage />} />
+      </Routes>
     );
   }
 
   return (
-    <Routes>
-      <Route path="/auth" element={session ? <Navigate to="/" replace /> : <AuthPage />} />
-      <Route path="/" element={session ? <DashboardPage session={session} /> : <Navigate to="/auth" replace />} />
-      <Route path="/deck/:deckId" element={session ? <DeckEditorPage session={session} /> : <Navigate to="/auth" replace />} />
-      <Route path="/deck/new" element={session ? <DeckEditorPage session={session} isNew /> : <Navigate to="/auth" replace />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Layout session={session}>
+      <Routes>
+        <Route path="/" element={<DashboardPage session={session} />} />
+        <Route path="/deck/:deckId" element={<DeckEditorPage session={session} />} />
+        <Route path="/generate" element={<GeneratePage session={session} />} />
+        <Route path="/paste" element={<PasteTextPage session={session} />} />
+        <Route path="/quizlet" element={<QuizletImportPage session={session} />} />
+        <Route path="/study" element={<StudyPage session={session} />} />
+        <Route path="/weights" element={<WeightsPage session={session} />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Layout>
   );
 }
