@@ -1,7 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 
 function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+
+function buildAcsDeck(cards) {
+  const deck = [];
+  for (const card of cards) {
+    const score = card.acs_score ?? 0;
+    const slots = score >= 2 ? 1 : score >= 0 ? 2 : 3;
+    for (let i = 0; i < slots; i++) deck.push(card);
+  }
+  return shuffle(deck);
+}
 
 function buildChoices(card, allCards) {
   const others = shuffle(allCards.filter(c => c.id !== card.id && c.back !== card.back));
@@ -15,11 +25,12 @@ function buildChoices(card, allCards) {
   ]);
 }
 
-async function updateCardScore(cardId, correct) {
+async function updateCardScore(cardId, correct, speedTier = null) {
   const { data } = await supabase.from('cards').select('acs_score, times_correct, times_incorrect').eq('id', cardId).single();
   if (!data) return;
+  const scoreChange = correct ? (speedTier === 'fast' ? 2 : 1) : -1;
   await supabase.from('cards').update({
-    acs_score: (data.acs_score ?? 0) + (correct ? 1 : -1),
+    acs_score: (data.acs_score ?? 0) + scoreChange,
     times_correct: (data.times_correct ?? 0) + (correct ? 1 : 0),
     times_incorrect: (data.times_incorrect ?? 0) + (correct ? 0 : 1),
   }).eq('id', cardId);
@@ -29,11 +40,18 @@ async function updateCardScore(cardId, correct) {
 function DeckPicker({ onStart }) {
   const [decks, setDecks] = useState([]);
   const [selectedId, setSelectedId] = useState('');
-  const [mode, setMode] = useState('flashcard');
+  const [mode, setMode] = useState('chill');
+  const [acsEnabled, setAcsEnabled] = useState(false);
 
   useEffect(() => {
     supabase.from('decks').select('id, name, cards(count)').order('created_at', { ascending: false }).then(({ data }) => setDecks(data ?? []));
   }, []);
+
+  const MODES = [
+    { id: 'chill', emoji: '🃏', label: 'Chill Study', sub: 'Flip cards, mark Got It or Missed It' },
+    { id: 'power', emoji: '⚡', label: 'Power Study', sub: 'Timed countdown — answer fast for bonus points' },
+    { id: 'multiplechoice', emoji: '🔢', label: 'Multiple Choice', sub: '4 options, tap the correct answer' },
+  ];
 
   return (
     <div style={s.page}>
@@ -58,29 +76,38 @@ function DeckPicker({ onStart }) {
 
       <div style={s.section}>
         <label style={s.label}>Mode</label>
-        <div style={s.modeRow}>
-          <button style={{ ...s.modeBtn, ...(mode === 'flashcard' ? s.modeBtnActive : {}) }} onClick={() => setMode('flashcard')}>
-            <span style={s.modeEmoji}>🃏</span>
-            <span style={s.modeLabel}>Flashcards</span>
-            <span style={s.modeSub}>Flip to reveal, mark Got It or Missed It</span>
-          </button>
-          <button style={{ ...s.modeBtn, ...(mode === 'multiplechoice' ? s.modeBtnActive : {}) }} onClick={() => setMode('multiplechoice')}>
-            <span style={s.modeEmoji}>🔢</span>
-            <span style={s.modeLabel}>Multiple Choice</span>
-            <span style={s.modeSub}>4 options, tap the correct answer</span>
-          </button>
+        <div style={s.modeGrid}>
+          {MODES.map(m => (
+            <button key={m.id} style={{ ...s.modeBtn, ...(mode === m.id ? s.modeBtnActive : {}) }} onClick={() => setMode(m.id)}>
+              <span style={s.modeEmoji}>{m.emoji}</span>
+              <span style={s.modeLabel}>{m.label}</span>
+              <span style={s.modeSub}>{m.sub}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      <button style={{ ...s.startBtn, ...(!selectedId ? s.startBtnDisabled : {}) }} onClick={() => onStart(selectedId, mode)} disabled={!selectedId}>
+      {(mode === 'chill' || mode === 'power') && (
+        <div style={s.acsRow}>
+          <div>
+            <p style={s.acsTitle}>Adaptive Card Selection</p>
+            <p style={s.acsSub}>Shows cards you get wrong more often</p>
+          </div>
+          <div style={{ ...s.acsToggle, background: acsEnabled ? '#5B4FE9' : '#D1D5DB' }} onClick={() => setAcsEnabled(v => !v)}>
+            <div style={{ ...s.acsThumb, transform: acsEnabled ? 'translateX(22px)' : 'translateX(2px)' }} />
+          </div>
+        </div>
+      )}
+
+      <button style={{ ...s.startBtn, ...(!selectedId ? s.startBtnDisabled : {}) }} onClick={() => onStart(selectedId, mode, acsEnabled)} disabled={!selectedId}>
         Start Studying
       </button>
     </div>
   );
 }
 
-// ── Flashcard session ─────────────────────────────────────────────────────────
-function FlashcardSession({ cards, onDone }) {
+// ── Chill Study session ───────────────────────────────────────────────────────
+function ChillSession({ cards, onDone }) {
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
@@ -90,10 +117,12 @@ function FlashcardSession({ cards, onDone }) {
 
   async function handleAnswer(correct) {
     await updateCardScore(card.id, correct);
-    if (!correct) setWrongIds(prev => [...prev, card.id]);
-    if (correct) setCorrectCount(c => c + 1);
+    const newWrongIds = !correct && !wrongIds.includes(card.id) ? [...wrongIds, card.id] : wrongIds;
+    if (!correct) setWrongIds(newWrongIds);
+    const newCorrect = correctCount + (correct ? 1 : 0);
+    if (correct) setCorrectCount(newCorrect);
     if (idx + 1 >= cards.length) {
-      onDone({ correctCount: correctCount + (correct ? 1 : 0), total: cards.length, wrongIds: correct ? wrongIds : [...wrongIds, card.id], allCards: cards });
+      onDone({ correctCount: newCorrect, total: cards.length, wrongIds: newWrongIds, allCards: cards });
     } else {
       setIdx(i => i + 1);
       setFlipped(false);
@@ -107,18 +136,139 @@ function FlashcardSession({ cards, onDone }) {
         <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%` }} /></div>
       </div>
 
-      <div style={s.flashCard} onClick={() => setFlipped(true)}>
+      <div style={s.flashCard} onClick={() => !flipped && setFlipped(true)}>
         <p style={s.cardSide}>{flipped ? 'ANSWER' : 'QUESTION'}</p>
         <p style={s.cardText}>{flipped ? card.back : card.front}</p>
         {!flipped && <p style={s.tapHint}>Click to reveal answer</p>}
       </div>
 
-      {flipped ? (
+      {flipped && (
         <div style={s.answerRow}>
           <button style={s.missedBtn} onClick={() => handleAnswer(false)}>✗ Missed It</button>
           <button style={s.gotItBtn} onClick={() => handleAnswer(true)}>✓ Got It</button>
         </div>
-      ) : null}
+      )}
+    </div>
+  );
+}
+
+// ── Power Study session ───────────────────────────────────────────────────────
+const POWER_TIME = 5;
+
+function PowerSession({ cards, allCards, onDone }) {
+  const [idx, setIdx] = useState(0);
+  const [choices, setChoices] = useState(() => buildChoices(cards[0], allCards));
+  const [selected, setSelected] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(POWER_TIME);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [wrongIds, setWrongIds] = useState([]);
+  const timerRef = useRef(null);
+  const startTimeRef = useRef(Date.now());
+
+  const card = cards[idx];
+
+  useEffect(() => {
+    startTimeRef.current = Date.now();
+    setTimeLeft(POWER_TIME);
+    timerRef.current = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 0.1) {
+          clearInterval(timerRef.current);
+          return 0;
+        }
+        return +(t - 0.1).toFixed(1);
+      });
+    }, 100);
+    return () => clearInterval(timerRef.current);
+  }, [idx]);
+
+  // Auto-submit when time runs out
+  useEffect(() => {
+    if (timeLeft === 0 && selected === null) {
+      handleSelect(null);
+    }
+  }, [timeLeft]);
+
+  function speedTier() {
+    const elapsed = (Date.now() - startTimeRef.current) / 1000;
+    if (elapsed < 2) return 'fast';
+    if (elapsed < 4) return 'medium';
+    return 'slow';
+  }
+
+  async function handleSelect(choice) {
+    if (selected !== null) return;
+    clearInterval(timerRef.current);
+    const correct = choice?.correct ?? false;
+    const tier = correct ? speedTier() : null;
+    const choiceId = choice?.id ?? 'timeout';
+    setSelected(choiceId);
+    await updateCardScore(card.id, correct, tier);
+    const newWrongIds = !correct && !wrongIds.includes(card.id) ? [...wrongIds, card.id] : wrongIds;
+    if (!correct) setWrongIds(newWrongIds);
+    const newCorrect = correctCount + (correct ? 1 : 0);
+    if (correct) setCorrectCount(newCorrect);
+
+    setTimeout(() => {
+      const nextIdx = idx + 1;
+      if (nextIdx >= cards.length) {
+        onDone({ correctCount: newCorrect, total: cards.length, wrongIds: newWrongIds, allCards });
+        return;
+      }
+      setIdx(nextIdx);
+      setChoices(buildChoices(cards[nextIdx], allCards));
+      setSelected(null);
+    }, 1000);
+  }
+
+  if (!choices) return (
+    <div style={s.sessionWrap}>
+      <p style={{ textAlign: 'center', color: '#6B7280', marginTop: 40 }}>Need at least 4 cards for Power Study.</p>
+    </div>
+  );
+
+  const timerPct = (timeLeft / POWER_TIME) * 100;
+  const timerColor = timeLeft > 3 ? '#22C55E' : timeLeft > 1.5 ? '#F59E0B' : '#EF4444';
+
+  return (
+    <div style={s.sessionWrap}>
+      <div style={s.sessionTop}>
+        <div style={s.powerTopRow}>
+          <span style={s.sessionProgress}>{idx + 1} / {cards.length}</span>
+          <span style={{ ...s.timerText, color: timerColor }}>⚡ {timeLeft.toFixed(1)}s</span>
+        </div>
+        <div style={s.progressBar}><div style={{ ...s.progressFill, width: `${(idx / cards.length) * 100}%` }} /></div>
+        <div style={{ ...s.timerBar, marginTop: 6 }}><div style={{ ...s.timerFill, width: `${timerPct}%`, background: timerColor }} /></div>
+      </div>
+
+      <div style={s.questionCard}>
+        <p style={s.cardSide}>QUESTION</p>
+        <p style={s.cardText}>{card.front}</p>
+      </div>
+
+      <div style={s.choicesList}>
+        {choices.map(choice => {
+          let style = s.choiceBtn;
+          if (selected !== null) {
+            if (choice.correct) style = { ...s.choiceBtn, ...s.choiceCorrect };
+            else if (choice.id === selected) style = { ...s.choiceBtn, ...s.choiceWrong };
+            else style = { ...s.choiceBtn, opacity: 0.4 };
+          }
+          return (
+            <button key={choice.id} style={style} onClick={() => handleSelect(choice)} disabled={selected !== null}>
+              {choice.text}
+            </button>
+          );
+        })}
+      </div>
+
+      {selected !== null && (
+        <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 8 }}>
+          {choices.find(c => c.correct && c.id === selected) ? (
+            timeLeft > 3 ? '⚡ Fast! +2 points' : '✓ Correct! +1 point'
+          ) : selected === 'timeout' ? '⏰ Time\'s up! -1 point' : '✗ Wrong. -1 point'}
+        </p>
+      )}
     </div>
   );
 }
@@ -155,7 +305,7 @@ function MCSession({ cards, onDone }) {
 
   if (!choices) return (
     <div style={s.sessionWrap}>
-      <p style={{ textAlign: 'center', color: '#6B7280', marginTop: 40 }}>Not enough cards for multiple choice — need at least 4 in this deck.</p>
+      <p style={{ textAlign: 'center', color: '#6B7280', marginTop: 40 }}>Not enough cards for multiple choice — need at least 4.</p>
     </div>
   );
 
@@ -272,15 +422,18 @@ function WrongReview({ cards, allCards, onDone }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function StudyPage() {
-  const [phase, setPhase] = useState('pick'); // pick | session | done | wrong
+  const [phase, setPhase] = useState('pick');
   const [sessionCards, setSessionCards] = useState([]);
-  const [mode, setMode] = useState('flashcard');
+  const [allCards, setAllCards] = useState([]);
+  const [mode, setMode] = useState('chill');
   const [result, setResult] = useState(null);
 
-  async function handleStart(deckId, selectedMode) {
+  async function handleStart(deckId, selectedMode, acsEnabled) {
     const { data } = await supabase.from('cards').select('*').eq('deck_id', deckId);
     if (!data?.length) { alert('This deck has no cards yet.'); return; }
-    setSessionCards(shuffle(data));
+    const cards = acsEnabled ? buildAcsDeck(data) : shuffle(data);
+    setAllCards(data);
+    setSessionCards(cards);
     setMode(selectedMode);
     setPhase('session');
   }
@@ -293,7 +446,8 @@ export default function StudyPage() {
     const wrongCards = result.wrongIds.map(id => result.allCards.find(c => c.id === id)).filter(Boolean);
     return <WrongReview cards={wrongCards} allCards={result.allCards} onDone={() => setPhase('pick')} />;
   }
-  if (mode === 'flashcard') return <FlashcardSession cards={sessionCards} onDone={handleDone} />;
+  if (mode === 'chill') return <ChillSession cards={sessionCards} onDone={handleDone} />;
+  if (mode === 'power') return <PowerSession cards={sessionCards} allCards={allCards} onDone={handleDone} />;
   return <MCSession cards={sessionCards} onDone={handleDone} />;
 }
 
@@ -312,20 +466,31 @@ const s = {
   deckOptionActive: { borderColor: PURPLE, background: '#EEF2FF', color: PURPLE },
   deckCount: { marginLeft: 'auto', fontSize: 12, color: '#9CA3AF', fontWeight: 600 },
   check: { fontSize: 16, color: PURPLE },
-  modeRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  modeBtn: { display: 'flex', flexDirection: 'column', gap: 4, padding: '18px 16px', borderRadius: 14, border: '1.5px solid #E5E7EB', background: '#fff', cursor: 'pointer', textAlign: 'left' },
+  modeGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 },
+  modeBtn: { display: 'flex', flexDirection: 'column', gap: 4, padding: '16px 14px', borderRadius: 14, border: '1.5px solid #E5E7EB', background: '#fff', cursor: 'pointer', textAlign: 'left' },
   modeBtnActive: { borderColor: PURPLE, background: '#EEF2FF' },
-  modeEmoji: { fontSize: 24, marginBottom: 4 },
-  modeLabel: { fontSize: 15, fontWeight: 700, color: '#1A1A2E' },
-  modeSub: { fontSize: 12, color: '#9CA3AF', lineHeight: 1.4 },
+  modeEmoji: { fontSize: 22, marginBottom: 4 },
+  modeLabel: { fontSize: 14, fontWeight: 700, color: '#1A1A2E' },
+  modeSub: { fontSize: 11, color: '#9CA3AF', lineHeight: 1.4 },
+
+  acsRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderRadius: 14, padding: '16px 18px', marginBottom: 20, border: '1.5px solid #E5E7EB' },
+  acsTitle: { fontSize: 14, fontWeight: 700, color: '#1A1A2E', marginBottom: 2 },
+  acsSub: { fontSize: 12, color: '#9CA3AF' },
+  acsToggle: { width: 48, height: 26, borderRadius: 13, cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 },
+  acsThumb: { position: 'absolute', top: 3, width: 20, height: 20, borderRadius: 10, background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', transition: 'transform 0.2s' },
+
   startBtn: { width: '100%', padding: '16px 0', borderRadius: 14, background: PURPLE, color: '#fff', fontSize: 16, fontWeight: 800, border: 'none', cursor: 'pointer', boxShadow: '0 4px 16px rgba(91,79,233,0.35)' },
   startBtnDisabled: { opacity: 0.4, boxShadow: 'none' },
 
   sessionWrap: { maxWidth: 600, margin: '0 auto', padding: '36px 24px' },
   sessionTop: { marginBottom: 24 },
+  powerTopRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sessionProgress: { fontSize: 14, fontWeight: 700, color: PURPLE, display: 'block', marginBottom: 8 },
   progressBar: { height: 6, background: '#E5E7EB', borderRadius: 4 },
   progressFill: { height: 6, background: PURPLE, borderRadius: 4, transition: 'width 0.3s' },
+  timerBar: { height: 5, background: '#E5E7EB', borderRadius: 4 },
+  timerFill: { height: 5, borderRadius: 4, transition: 'width 0.1s linear' },
+  timerText: { fontSize: 16, fontWeight: 900 },
 
   flashCard: { background: '#fff', borderRadius: 20, padding: 36, minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', cursor: 'pointer', marginBottom: 24, textAlign: 'center' },
   questionCard: { background: '#fff', borderRadius: 20, padding: 28, minHeight: 140, display: 'flex', flexDirection: 'column', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', marginBottom: 16, borderLeft: `4px solid ${PURPLE}` },
