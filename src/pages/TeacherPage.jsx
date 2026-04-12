@@ -324,7 +324,6 @@ function ClassDetail({ cls, session, onBack }) {
 // ── Main Teacher Page ─────────────────────────────────────────────────────────
 
 export default function TeacherPage({ session }) {
-  const [profile, setProfile] = useState(null);
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -335,11 +334,10 @@ export default function TeacherPage({ session }) {
 
   async function loadAll() {
     setLoading(true);
-    const [{ data: prof }, { data: clsData }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', session.user.id).single(),
-      supabase.from('classes').select('*, class_members(count)').eq('teacher_id', session.user.id),
-    ]);
-    setProfile(prof);
+    const { data: clsData } = await supabase
+      .from('classes')
+      .select('*, class_members(count)')
+      .eq('teacher_id', session.user.id);
     setClasses(clsData ?? []);
     setLoading(false);
   }
@@ -347,14 +345,25 @@ export default function TeacherPage({ session }) {
   async function handleCreateClass() {
     if (!newClassName.trim()) return;
     const code = generateCode();
-    const { data } = await supabase
+
+    // Ensure profile row exists before inserting class
+    await supabase.from('profiles').upsert({
+      id: session.user.id,
+      role: 'teacher',
+      display_name: session.user.email,
+    }, { onConflict: 'id' });
+
+    const { data, error } = await supabase
       .from('classes')
       .insert({ name: newClassName.trim(), code, teacher_id: session.user.id })
       .select()
       .single();
+
+    if (error) {
+      alert('Could not create class: ' + error.message);
+      return;
+    }
     if (data) {
-      // Update profile role to teacher
-      await supabase.from('profiles').update({ role: 'teacher' }).eq('id', session.user.id);
       setClasses(prev => [{ ...data, class_members: [{ count: 0 }] }, ...prev]);
       setNewClassName('');
       setCreating(false);
