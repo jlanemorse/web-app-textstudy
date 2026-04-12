@@ -152,14 +152,14 @@ function StudentRow({ student, sessions, decks, pushedDecks, studentDecks, onExp
 
 const sr = {
   wrap: { background: '#fff', borderRadius: 14, marginBottom: 8, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' },
-  row: { display: 'flex', alignItems: 'center', padding: '14px 18px', cursor: 'pointer', gap: 8 },
-  nameCol: { flex: 2, minWidth: 0 },
+  row: { display: 'flex', alignItems: 'center', padding: '14px 18px', cursor: 'pointer' },
+  nameCol: { flex: 1, minWidth: 0, paddingRight: 12 },
   name: { fontSize: 14, fontWeight: 700, color: '#1A1A2E', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   lastActive: { fontSize: 11, color: '#9CA3AF' },
-  stat: { flex: 1, textAlign: 'center', minWidth: 60 },
-  statNum: { fontSize: 16, fontWeight: 800, color: '#1A1A2E' },
+  stat: { width: COL_W, flexShrink: 0, textAlign: 'center' },
+  statNum: { fontSize: 15, fontWeight: 800, color: '#1A1A2E' },
   statLabel: { fontSize: 10, color: '#9CA3AF', fontWeight: 600, marginTop: 1 },
-  chevron: { fontSize: 18, color: '#9CA3AF', transition: 'transform 0.2s', flexShrink: 0 },
+  chevron: { fontSize: 18, color: '#9CA3AF', transition: 'transform 0.2s', flexShrink: 0, width: 20, textAlign: 'center' },
   expanded: { borderTop: '1px solid #F3F4F6', padding: '12px 18px', background: '#FAFAFA', overflowX: 'auto' },
   noDecks: { fontSize: 13, color: '#9CA3AF', textAlign: 'center', padding: '12px 0' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
@@ -364,9 +364,15 @@ function ClassDetail({ cls, session, onBack }) {
       ) : (
         <>
           <div style={s.studentTableHeader}>
-            {['Student', '🃏 Chill', '⚡ Power', '⏳ Passive', 'Chill Time', 'Power Time', 'Accuracy', 'Cards Seen', ''].map((h, i) => (
-              <div key={i} style={{ flex: i === 0 ? 2 : 1, fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: i > 0 ? 'center' : 'left', minWidth: 60 }}>{h}</div>
-            ))}
+            <div style={s.thName}>Student</div>
+            <div style={s.thStat}>🃏 Chill</div>
+            <div style={s.thStat}>⚡ Power</div>
+            <div style={s.thStat}>⏳ Passive</div>
+            <div style={s.thStat}>Chill Time</div>
+            <div style={s.thStat}>Power Time</div>
+            <div style={s.thStat}>Accuracy</div>
+            <div style={s.thStat}>Cards Seen</div>
+            <div style={{ width: 20 }} />
           </div>
           {members.map(member => (
             <StudentRow
@@ -496,6 +502,7 @@ export default function TeacherPage({ session }) {
 }
 
 const PURPLE = '#5B4FE9';
+const COL_W = 82;
 const s = {
   page: { maxWidth: 900, margin: '0 auto', padding: '36px 24px' },
   backBtn: { fontSize: 14, fontWeight: 700, color: PURPLE, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 20, display: 'block' },
@@ -540,5 +547,7 @@ const s = {
 
   sectionTitle: { fontSize: 16, fontWeight: 800, color: '#1A1A2E', marginBottom: 10 },
   emptyStudents: { background: '#fff', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' },
-  studentTableHeader: { display: 'flex', padding: '0 18px', marginBottom: 6, gap: 8 },
+  studentTableHeader: { display: 'flex', alignItems: 'center', padding: '0 18px', marginBottom: 6 },
+  thName: { flex: 1, fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px', paddingRight: 12 },
+  thStat: { width: COL_W, flexShrink: 0, fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' },
 };
