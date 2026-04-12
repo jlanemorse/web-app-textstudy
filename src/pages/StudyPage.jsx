@@ -57,7 +57,7 @@ const pd = {
 };
 
 // ── Deck picker ───────────────────────────────────────────────────────────────
-function DeckPicker({ onStart, pausedSession, onResume, onWrongReviewFromPaused, onTogglePausedAcs, session }) {
+function DeckPicker({ onStart, pausedSessions, onResume, onDiscard, onWrongReviewFromPaused, onTogglePausedAcs, session }) {
   const [decks, setDecks] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [mode, setMode] = useState('chill');
@@ -74,36 +74,39 @@ function DeckPicker({ onStart, pausedSession, onResume, onWrongReviewFromPaused,
       <h1 style={s.title}>🎮 Study</h1>
       <p style={s.sub}>Pick a deck and a mode to start studying.</p>
 
-      {pausedSession && (
-        <div style={s.resumeCard}>
+      {pausedSessions.map(ps => (
+        <div key={ps.id} style={s.resumeCard}>
           <div style={s.resumeTop}>
             <div>
               <p style={s.resumeTitle}>📌 Session In Progress</p>
-              <p style={s.resumeDeck}>{pausedSession.deckName}</p>
-              <p style={s.resumeMeta}>{pausedSession.mode === 'chill' ? '🃏 Chill' : '⚡ Power'} · {pausedSession.format === 'flip' ? 'Know/Don\'t Know' : 'Multiple Choice'}</p>
+              <p style={s.resumeDeck}>{ps.deckName}</p>
+              <p style={s.resumeMeta}>{ps.mode === 'chill' ? '🃏 Chill' : '⚡ Power'} · {ps.format === 'flip' ? 'Know/Don\'t Know' : 'Multiple Choice'}</p>
             </div>
             <div style={s.resumeScore}>
-              <p style={s.resumeScoreNum}>{pausedSession.results.filter(r => r === 'correct').length} / {pausedSession.results.length}</p>
+              <p style={s.resumeScoreNum}>{ps.results.filter(r => r === 'correct').length} / {ps.results.length}</p>
               <p style={s.resumeScoreLabel}>answered</p>
             </div>
           </div>
-          <ProgressDots results={pausedSession.results} total={pausedSession.cards.length} />
+          <ProgressDots results={ps.results} total={ps.cards.length} />
           <div style={s.resumeAcsRow}>
             <span style={s.resumeAcsLabel}>Adaptive Card Selection</span>
-            <div style={{ ...s.acsToggle, background: pausedSession.acsEnabled ? '#5B4FE9' : '#4B5563' }} onClick={onTogglePausedAcs}>
-              <div style={{ ...s.acsThumb, transform: pausedSession.acsEnabled ? 'translateX(22px)' : 'translateX(2px)' }} />
+            <div style={{ ...s.acsToggle, background: ps.acsEnabled ? '#5B4FE9' : '#4B5563' }} onClick={() => onTogglePausedAcs(ps.id)}>
+              <div style={{ ...s.acsThumb, transform: ps.acsEnabled ? 'translateX(22px)' : 'translateX(2px)' }} />
             </div>
           </div>
           <div style={s.resumeBtns}>
-            {pausedSession.wrongIds?.length > 0 && (
-              <button style={s.resumeWrongBtn} onClick={onWrongReviewFromPaused}>
-                📋 Wrong Answer Review ({pausedSession.wrongIds.length})
+            {ps.wrongIds?.length > 0 && (
+              <button style={s.resumeWrongBtn} onClick={() => onWrongReviewFromPaused(ps)}>
+                📋 Wrong Answer Review ({ps.wrongIds.length})
               </button>
             )}
-            <button style={s.resumeBtn} onClick={onResume}>Resume Session →</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{ ...s.resumeBtn, flex: 1 }} onClick={() => onResume(ps)}>Resume →</button>
+              <button style={s.discardBtn} onClick={() => onDiscard(ps.id)}>Discard</button>
+            </div>
           </div>
         </div>
-      )}
+      ))}
 
       <div style={s.section}>
         <label style={s.label}>Choose a Deck</label>
@@ -300,6 +303,7 @@ function PowerSession({ cards, allCards, format, onDone, onBack, onEnd, initialS
   const [correctCount, setCorrectCount] = useState(initialState?.correctCount ?? 0);
   const [wrongIds, setWrongIds] = useState(initialState?.wrongIds ?? []);
   const [results, setResults] = useState(initialState?.results ?? []);
+  const [pendingAdvance, setPendingAdvance] = useState(null);
   const timerRef = useRef(null);
   const startTimeRef = useRef(Date.now());
 
@@ -347,16 +351,21 @@ function PowerSession({ cards, allCards, format, onDone, onBack, onEnd, initialS
     if (correct) setCorrectCount(newCorrect);
     setResults(newResults);
 
-    setTimeout(() => {
-      if (idx + 1 >= cards.length) {
-        onDone({ correctCount: newCorrect, total: cards.length, wrongIds: newWrongIds, allCards });
-        return;
-      }
-      setIdx(i => i + 1);
-      setFlipped(false);
-      setSelected(null);
-      if (format === 'mc') setChoices(buildChoices(cards[idx + 1], allCards));
-    }, 1000);
+    setPendingAdvance({ newCorrect, newWrongIds });
+  }
+
+  function handleNext() {
+    if (!pendingAdvance) return;
+    const { newCorrect, newWrongIds } = pendingAdvance;
+    setPendingAdvance(null);
+    if (idx + 1 >= cards.length) {
+      onDone({ correctCount: newCorrect, total: cards.length, wrongIds: newWrongIds, allCards });
+      return;
+    }
+    setIdx(i => i + 1);
+    setFlipped(false);
+    setSelected(null);
+    if (format === 'mc') setChoices(buildChoices(cards[idx + 1], allCards));
   }
 
   const timerPct = (timeLeft / POWER_TIME) * 100;
@@ -391,11 +400,16 @@ function PowerSession({ cards, allCards, format, onDone, onBack, onEnd, initialS
             </div>
           )}
           {selected !== null && (
-            <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 12 }}>
-              {selected !== 'timeout' && choices?.find?.(c => c.correct && c.id === selected)
-                ? (speedTier() === 'fast' ? '⚡ Fast! +2 points' : '✓ Correct! +1 point')
-                : selected === 'timeout' ? "⏰ Time's up! -1 point" : '✗ Wrong. -1 point'}
-            </p>
+            <>
+              <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 12 }}>
+                {selected !== 'timeout' && selected !== null && (results[results.length - 1] === 'correct')
+                  ? (speedTier() === 'fast' ? '⚡ Fast! +2 points' : '✓ Correct! +1 point')
+                  : selected === 'timeout' ? "⏰ Time's up! -1 point" : '✗ Wrong. -1 point'}
+              </p>
+              <button style={{ ...s.nextBtn, marginTop: 16 }} onClick={handleNext}>
+                {idx + 1 < cards.length ? 'Next →' : 'Finish'}
+              </button>
+            </>
           )}
         </>
       ) : (
@@ -422,11 +436,16 @@ function PowerSession({ cards, allCards, format, onDone, onBack, onEnd, initialS
             </div>
           ) : <p style={{ color: '#9CA3AF', textAlign: 'center' }}>Need at least 4 cards for multiple choice.</p>}
           {selected !== null && (
-            <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 8 }}>
-              {choices?.find(c => c.correct && c.id === selected)
-                ? (speedTier() === 'fast' ? '⚡ Fast! +2 points' : '✓ Correct! +1 point')
-                : selected === 'timeout' ? "⏰ Time's up! -1 point" : '✗ Wrong. -1 point'}
-            </p>
+            <>
+              <p style={{ textAlign: 'center', fontSize: 13, color: '#9CA3AF', marginTop: 8 }}>
+                {choices?.find(c => c.correct && c.id === selected)
+                  ? (speedTier() === 'fast' ? '⚡ Fast! +2 points' : '✓ Correct! +1 point')
+                  : selected === 'timeout' ? "⏰ Time's up! -1 point" : '✗ Wrong. -1 point'}
+              </p>
+              <button style={{ ...s.nextBtn, marginTop: 12 }} onClick={handleNext}>
+                {idx + 1 < cards.length ? 'Next →' : 'Finish'}
+              </button>
+            </>
           )}
         </>
       )}
@@ -518,7 +537,7 @@ function WrongReview({ cards, allCards, onDone }) {
   );
 }
 
-const PAUSED_KEY = 'textstudy_paused_session';
+const PAUSED_KEY = 'textstudy_paused_sessions';
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function StudyPage({ session }) {
@@ -528,17 +547,16 @@ export default function StudyPage({ session }) {
   const [mode, setMode] = useState('chill');
   const [format, setFormat] = useState('flip');
   const [result, setResult] = useState(null);
-  const [pausedSession, setPausedSession] = useState(() => {
-    try { const s = localStorage.getItem(PAUSED_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
+  const [pausedSessions, setPausedSessions] = useState(() => {
+    try { const s = localStorage.getItem(PAUSED_KEY); return s ? JSON.parse(s) : []; } catch { return []; }
   });
   const [resumeState, setResumeState] = useState(null);
   const [deckName, setDeckName] = useState('');
   const [acsEnabled, setAcsEnabled] = useState(false);
 
-  function savePaused(session) {
-    setPausedSession(session);
-    if (session) localStorage.setItem(PAUSED_KEY, JSON.stringify(session));
-    else localStorage.removeItem(PAUSED_KEY);
+  function savePausedList(list) {
+    setPausedSessions(list);
+    localStorage.setItem(PAUSED_KEY, JSON.stringify(list));
   }
 
   async function handleStart(deckId, selectedDeckName, selectedMode, selectedFormat, acs, cardOrder) {
@@ -551,41 +569,51 @@ export default function StudyPage({ session }) {
     setFormat(selectedFormat);
     setDeckName(selectedDeckName);
     setAcsEnabled(acs);
-    savePaused(null);
     setResumeState(null);
     setPhase('session');
   }
 
   function handleBack(sessionState) {
-    const saved = { ...sessionState, cards: sessionCards, allCards, mode, format, deckName, acsEnabled };
-    savePaused(saved);
+    const saved = { id: Date.now().toString(), ...sessionState, cards: sessionCards, allCards, mode, format, deckName, acsEnabled };
+    // Replace existing paused entry for same deck/mode if present, else append
+    const existing = pausedSessions.findIndex(ps => ps.deckName === deckName && ps.mode === mode);
+    const updated = existing >= 0
+      ? pausedSessions.map((ps, i) => i === existing ? saved : ps)
+      : [...pausedSessions, saved];
+    savePausedList(updated);
     setResumeState(sessionState);
     setPhase('pick');
   }
 
-  function handleResume() {
-    setSessionCards(pausedSession.cards);
-    setAllCards(pausedSession.allCards);
-    setMode(pausedSession.mode);
-    setFormat(pausedSession.format);
-    setResumeState({ idx: pausedSession.idx, correctCount: pausedSession.correctCount, wrongIds: pausedSession.wrongIds, results: pausedSession.results });
+  function handleResume(ps) {
+    setSessionCards(ps.cards);
+    setAllCards(ps.allCards);
+    setMode(ps.mode);
+    setFormat(ps.format);
+    setDeckName(ps.deckName);
+    setAcsEnabled(ps.acsEnabled);
+    setResumeState({ idx: ps.idx, correctCount: ps.correctCount, wrongIds: ps.wrongIds, results: ps.results });
+    savePausedList(pausedSessions.filter(s => s.id !== ps.id));
     setPhase('session');
   }
 
-  function handleWrongReviewFromPaused() {
-    setResult({ wrongIds: pausedSession.wrongIds, allCards: pausedSession.allCards, correctCount: pausedSession.correctCount, total: pausedSession.cards.length });
+  function handleDiscard(id) {
+    savePausedList(pausedSessions.filter(ps => ps.id !== id));
+  }
+
+  function handleWrongReviewFromPaused(ps) {
+    setResult({ wrongIds: ps.wrongIds, allCards: ps.allCards, correctCount: ps.correctCount, total: ps.cards.length });
     setPhase('wrong');
   }
 
-  function handleTogglePausedAcs() {
-    const updated = { ...pausedSession, acsEnabled: !pausedSession.acsEnabled };
-    savePaused(updated);
+  function handleTogglePausedAcs(id) {
+    savePausedList(pausedSessions.map(ps => ps.id === id ? { ...ps, acsEnabled: !ps.acsEnabled } : ps));
   }
 
-  function handleDone(r) { savePaused(null); setResumeState(null); setResult(r); setPhase('done'); }
-  function handleEnd() { savePaused(null); setResumeState(null); setPhase('pick'); }
+  function handleDone(r) { setResumeState(null); setResult(r); setPhase('done'); }
+  function handleEnd() { setResumeState(null); setPhase('pick'); }
 
-  if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSession={pausedSession} onResume={handleResume} onWrongReviewFromPaused={handleWrongReviewFromPaused} onTogglePausedAcs={handleTogglePausedAcs} session={session} />;
+  if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSessions={pausedSessions} onResume={handleResume} onDiscard={handleDiscard} onWrongReviewFromPaused={handleWrongReviewFromPaused} onTogglePausedAcs={handleTogglePausedAcs} session={session} />;
   if (phase === 'done') return <DoneScreen result={result} onRestart={() => setPhase('pick')} onWrongReview={() => setPhase('wrong')} />;
   if (phase === 'wrong') {
     const wrongCards = result.wrongIds.map(id => result.allCards.find(c => c.id === id)).filter(Boolean);
@@ -644,6 +672,7 @@ const s = {
   resumeBtns: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 },
   resumeBtn: { width: '100%', padding: '12px 0', borderRadius: 12, background: '#5B4FE9', color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer' },
   resumeWrongBtn: { width: '100%', padding: '12px 0', borderRadius: 12, background: '#7F1D1D', color: '#FCA5A5', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer' },
+  discardBtn: { padding: '12px 16px', borderRadius: 12, background: 'transparent', color: '#6B7280', fontSize: 13, fontWeight: 700, border: '1.5px solid #374151', cursor: 'pointer', flexShrink: 0 },
 
   sessionWrap: { maxWidth: 600, margin: '0 auto', padding: '24px 24px' },
   sessionHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
