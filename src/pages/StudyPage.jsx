@@ -57,7 +57,7 @@ const pd = {
 };
 
 // ── Deck picker ───────────────────────────────────────────────────────────────
-function DeckPicker({ onStart, pausedSession, onResume, onWrongReviewFromPaused, onTogglePausedAcs }) {
+function DeckPicker({ onStart, pausedSession, onResume, onWrongReviewFromPaused, onTogglePausedAcs, session }) {
   const [decks, setDecks] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [mode, setMode] = useState('chill');
@@ -66,7 +66,7 @@ function DeckPicker({ onStart, pausedSession, onResume, onWrongReviewFromPaused,
   const [cardOrder, setCardOrder] = useState('random');
 
   useEffect(() => {
-    supabase.from('decks').select('id, name, cards(count)').order('created_at', { ascending: false }).then(({ data }) => setDecks(data ?? []));
+    supabase.from('decks').select('id, name, cards(count)').eq('user_id', session.user.id).order('created_at', { ascending: false }).then(({ data }) => setDecks(data ?? []));
   }, []);
 
   return (
@@ -584,7 +584,7 @@ export default function StudyPage() {
 
   function handleDone(r) { savePaused(null); setResumeState(null); setResult(r); setPhase('done'); }
 
-  if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSession={pausedSession} onResume={handleResume} onWrongReviewFromPaused={handleWrongReviewFromPaused} onTogglePausedAcs={handleTogglePausedAcs} />;
+  if (phase === 'pick') return <DeckPicker onStart={handleStart} pausedSession={pausedSession} onResume={handleResume} onWrongReviewFromPaused={handleWrongReviewFromPaused} onTogglePausedAcs={handleTogglePausedAcs} session={session} />;
   if (phase === 'done') return <DoneScreen result={result} onRestart={() => setPhase('pick')} onWrongReview={() => setPhase('wrong')} />;
   if (phase === 'wrong') {
     const wrongCards = result.wrongIds.map(id => result.allCards.find(c => c.id === id)).filter(Boolean);
