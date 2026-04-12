@@ -63,6 +63,7 @@ function DeckPicker({ onStart, pausedSession, onResume }) {
   const [mode, setMode] = useState('chill');
   const [format, setFormat] = useState('flip');
   const [acsEnabled, setAcsEnabled] = useState(false);
+  const [cardOrder, setCardOrder] = useState('random');
 
   useEffect(() => {
     supabase.from('decks').select('id, name, cards(count)').order('created_at', { ascending: false }).then(({ data }) => setDecks(data ?? []));
@@ -135,6 +136,18 @@ function DeckPicker({ onStart, pausedSession, onResume }) {
         </div>
       </div>
 
+      <div style={s.section}>
+        <label style={s.label}>Card Order</label>
+        <div style={s.formatRow}>
+          <button style={{ ...s.formatBtn, ...(cardOrder === 'random' ? s.formatBtnActive : {}) }} onClick={() => setCardOrder('random')}>
+            🔀 Random
+          </button>
+          <button style={{ ...s.formatBtn, ...(cardOrder === 'inorder' ? s.formatBtnActive : {}) }} onClick={() => setCardOrder('inorder')}>
+            📋 In Order
+          </button>
+        </div>
+      </div>
+
       <div style={s.acsRow}>
         <div>
           <p style={s.acsTitle}>Adaptive Card Selection</p>
@@ -147,7 +160,7 @@ function DeckPicker({ onStart, pausedSession, onResume }) {
 
       <button style={{ ...s.startBtn, ...(!selectedId ? s.startBtnDisabled : {}) }} onClick={() => {
         const deck = decks.find(d => d.id === selectedId);
-        onStart(selectedId, deck?.name ?? '', mode, format, acsEnabled);
+        onStart(selectedId, deck?.name ?? '', mode, format, acsEnabled, cardOrder);
       }} disabled={!selectedId}>
         Start Studying
       </button>
@@ -504,10 +517,10 @@ export default function StudyPage() {
   const [resumeState, setResumeState] = useState(null);
   const [deckName, setDeckName] = useState('');
 
-  async function handleStart(deckId, selectedDeckName, selectedMode, selectedFormat, acsEnabled) {
-    const { data } = await supabase.from('cards').select('*').eq('deck_id', deckId);
+  async function handleStart(deckId, selectedDeckName, selectedMode, selectedFormat, acsEnabled, cardOrder) {
+    const { data } = await supabase.from('cards').select('*').eq('deck_id', deckId).order('created_at');
     if (!data?.length) { alert('This deck has no cards yet.'); return; }
-    const cards = acsEnabled ? buildAcsDeck(data) : shuffle(data);
+    const cards = acsEnabled ? buildAcsDeck(data) : cardOrder === 'inorder' ? data : shuffle(data);
     setAllCards(data);
     setSessionCards(cards);
     setMode(selectedMode);
