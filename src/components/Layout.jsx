@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase';
 
@@ -16,6 +17,25 @@ const NAV = [
 export default function Layout({ children, session }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [displayName, setDisplayName] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    supabase.from('profiles').select('display_name').eq('id', session.user.id).single()
+      .then(({ data }) => {
+        if (data?.display_name) setDisplayName(data.display_name);
+      });
+  }, [session]);
+
+  async function saveName() {
+    const trimmed = nameDraft.trim();
+    setEditingName(false);
+    if (!trimmed || trimmed === displayName) return;
+    setDisplayName(trimmed);
+    await supabase.from('profiles').upsert({ id: session.user.id, display_name: trimmed }, { onConflict: 'id' });
+  }
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -41,7 +61,22 @@ export default function Layout({ children, session }) {
           })}
         </nav>
         <div style={s.sidebarBottom}>
-          <p style={s.email}>{session?.user?.email}</p>
+          {editingName ? (
+            <input
+              style={s.nameInput}
+              value={nameDraft}
+              onChange={e => setNameDraft(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
+              autoFocus
+              placeholder="Your name"
+            />
+          ) : (
+            <button style={s.nameBtn} onClick={() => { setNameDraft(displayName); setEditingName(true); }}>
+              {displayName || session?.user?.email || '—'}
+              <span style={s.namePencil}>✎</span>
+            </button>
+          )}
           <button style={s.signOut} onClick={handleSignOut}>Sign Out</button>
         </div>
       </aside>
@@ -70,7 +105,9 @@ const s = {
   navItemActive: { background: '#EEF2FF', color: PURPLE, fontWeight: 700 },
   navEmoji: { fontSize: 16 },
   sidebarBottom: { borderTop: '1px solid #F3F4F6', paddingTop: 16, paddingLeft: 8 },
-  email: { fontSize: 12, color: '#9CA3AF', marginBottom: 8, wordBreak: 'break-all' },
+  nameBtn: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#374151', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 8, maxWidth: '100%', textAlign: 'left', wordBreak: 'break-all' },
+  namePencil: { fontSize: 11, color: '#9CA3AF', flexShrink: 0 },
+  nameInput: { width: '100%', fontSize: 13, padding: '6px 8px', borderRadius: 8, border: '1.5px solid #5B4FE9', marginBottom: 8, outline: 'none', boxSizing: 'border-box' },
   signOut: { fontSize: 13, fontWeight: 700, color: '#6B7280', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 },
   main: { flex: 1, minHeight: '100vh', overflowY: 'auto' },
 };
