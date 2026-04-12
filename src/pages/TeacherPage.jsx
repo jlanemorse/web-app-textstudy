@@ -64,16 +64,20 @@ function StudentRow({ student, sessions, decks, pushedDecks, studentDecks, onExp
           <p style={sr.lastActive}>{lastActive ? fmtDate(lastActive) : 'Never studied'}</p>
         </div>
         <div style={sr.stat}>
-          <p style={sr.statNum}>{mySessions.length}</p>
-          <p style={sr.statLabel}>Sessions</p>
-        </div>
-        <div style={sr.stat}>
-          <p style={sr.statNum}>{fmt(chillMs)}</p>
+          <p style={sr.statNum}>{mySessions.filter(s => s.mode === 'chill').length}</p>
           <p style={sr.statLabel}>🃏 Chill</p>
         </div>
         <div style={sr.stat}>
-          <p style={sr.statNum}>{fmt(powerMs)}</p>
+          <p style={sr.statNum}>{mySessions.filter(s => s.mode === 'power').length}</p>
           <p style={sr.statLabel}>⚡ Power</p>
+        </div>
+        <div style={sr.stat}>
+          <p style={sr.statNum}>{fmt(chillMs)}</p>
+          <p style={sr.statLabel}>Chill Time</p>
+        </div>
+        <div style={sr.stat}>
+          <p style={sr.statNum}>{fmt(powerMs)}</p>
+          <p style={sr.statLabel}>Power Time</p>
         </div>
         <div style={sr.stat}>
           <p style={{ ...sr.statNum, color: accuracy === null ? '#9CA3AF' : accuracy >= 70 ? '#16A34A' : accuracy >= 50 ? '#D97706' : '#DC2626' }}>
@@ -356,7 +360,7 @@ function ClassDetail({ cls, session, onBack }) {
       ) : (
         <>
           <div style={s.studentTableHeader}>
-            {['Student', 'Sessions', '🃏 Chill', '⚡ Power', 'Accuracy', 'Cards Seen', ''].map((h, i) => (
+            {['Student', '🃏 Chill', '⚡ Power', 'Chill Time', 'Power Time', 'Accuracy', 'Cards Seen', ''].map((h, i) => (
               <div key={i} style={{ flex: i === 0 ? 2 : 1, fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: i > 0 ? 'center' : 'left', minWidth: 60 }}>{h}</div>
             ))}
           </div>
