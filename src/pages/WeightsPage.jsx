@@ -39,6 +39,12 @@ export default function WeightsPage({ session }) {
     load();
   }
 
+  async function handleResetCard(card) {
+    if (!confirm(`Reset score for this card?`)) return;
+    await supabase.from('cards').update({ acs_score: 0, times_correct: 0, times_incorrect: 0 }).eq('id', card.id);
+    load();
+  }
+
   const allCards = Object.values(cardsByDeck).flat();
   const seenCards = allCards.filter(c => (c.times_correct ?? 0) + (c.times_incorrect ?? 0) > 0);
   const positiveCount = seenCards.filter(c => (c.acs_score ?? 0) > 0).length;
@@ -92,6 +98,9 @@ export default function WeightsPage({ session }) {
                   <div style={{ ...s.scoreBadge, borderColor: color }}>
                     <p style={{ ...s.scoreNum, color }}>{seen ? scoreLabel(score) : '0'}</p>
                   </div>
+                  {seen && (
+                    <button style={s.cardResetBtn} onClick={() => handleResetCard(card)}>↺</button>
+                  )}
                 </div>
               );
             })}
@@ -130,4 +139,5 @@ const s = {
   scoreBadge: { width: 48, height: 48, borderRadius: 24, border: '2px solid', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   scoreNum: { fontSize: 16, fontWeight: 900 },
   empty: { textAlign: 'center', padding: '60px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
+  cardResetBtn: { padding: '6px 10px', borderRadius: 8, background: '#FEE2E2', color: '#DC2626', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', flexShrink: 0 },
 };
