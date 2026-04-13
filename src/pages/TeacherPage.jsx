@@ -150,6 +150,8 @@ function StudentRow({ student, sessions, decks, pushedDecks, studentDecks, onExp
   );
 }
 
+const COL_W = 82;
+
 const sr = {
   wrap: { background: '#fff', borderRadius: 14, marginBottom: 8, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' },
   row: { display: 'flex', alignItems: 'center', padding: '14px 18px', cursor: 'pointer' },
@@ -502,7 +504,6 @@ export default function TeacherPage({ session }) {
 }
 
 const PURPLE = '#5B4FE9';
-const COL_W = 82;
 const s = {
   page: { maxWidth: 900, margin: '0 auto', padding: '36px 24px' },
   backBtn: { fontSize: 14, fontWeight: 700, color: PURPLE, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 20, display: 'block' },
