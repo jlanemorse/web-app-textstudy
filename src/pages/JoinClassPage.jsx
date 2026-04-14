@@ -112,9 +112,8 @@ export default function JoinClassPage({ session }) {
 
     await supabase.from('profiles').upsert({
       id: session.user.id,
-      role: 'student',
       display_name: session.user.email,
-    }, { onConflict: 'id' });
+    }, { onConflict: 'id', ignoreDuplicates: false });
 
     const { error } = await supabase
       .from('class_members')

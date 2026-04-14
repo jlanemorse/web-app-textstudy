@@ -5,6 +5,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('student'); // 'student' | 'teacher'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -19,9 +20,15 @@ export default function AuthPage() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) setError(error.message);
     } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) setError(error.message);
-      else setSuccess('Account created! Check your email to confirm, then log in.');
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) { setError(error.message); }
+      else {
+        // Set role at signup time — never overwrite later
+        if (data?.user) {
+          await supabase.from('profiles').upsert({ id: data.user.id, role, display_name: email }, { onConflict: 'id' });
+        }
+        setSuccess('Account created! Check your email to confirm, then log in.');
+      }
     }
     setLoading(false);
   }
@@ -57,6 +64,12 @@ export default function AuthPage() {
             required
             autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
           />
+          {mode === 'signup' && (
+            <div style={s.roleRow}>
+              <button type="button" style={{ ...s.roleBtn, ...(role === 'student' ? s.roleBtnActive : {}) }} onClick={() => setRole('student')}>🎓 Student</button>
+              <button type="button" style={{ ...s.roleBtn, ...(role === 'teacher' ? s.roleBtnActive : {}) }} onClick={() => setRole('teacher')}>👩‍🏫 Teacher</button>
+            </div>
+          )}
           {error && <p style={s.error}>{error}</p>}
           {success && <p style={s.successMsg}>{success}</p>}
           <button style={s.btn} type="submit" disabled={loading}>
@@ -82,6 +95,9 @@ const s = {
   form: { display: 'flex', flexDirection: 'column', gap: 12 },
   input: { padding: '13px 16px', borderRadius: 12, border: '1.5px solid #E5E7EB', fontSize: 15, color: '#1A1A2E', background: '#F9FAFB', transition: 'border-color 0.15s' },
   btn: { padding: '14px 0', borderRadius: 12, background: PURPLE, color: '#fff', fontSize: 15, fontWeight: 800, border: 'none', cursor: 'pointer', marginTop: 4, boxShadow: '0 4px 14px rgba(91,79,233,0.35)', transition: 'opacity 0.15s' },
+  roleRow: { display: 'flex', gap: 10 },
+  roleBtn: { flex: 1, padding: '11px 0', borderRadius: 12, border: '2px solid #E5E7EB', background: '#F9FAFB', fontSize: 14, fontWeight: 700, color: '#6B7280', cursor: 'pointer' },
+  roleBtnActive: { border: '2px solid #5B4FE9', background: '#EEF2FF', color: '#5B4FE9' },
   error: { color: '#DC2626', fontSize: 13, textAlign: 'left' },
   successMsg: { color: '#16A34A', fontSize: 13, textAlign: 'left' },
 };

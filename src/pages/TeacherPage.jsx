@@ -422,9 +422,8 @@ export default function TeacherPage({ session }) {
     // Ensure profile row exists before inserting class
     await supabase.from('profiles').upsert({
       id: session.user.id,
-      role: 'teacher',
       display_name: session.user.email,
-    }, { onConflict: 'id' });
+    }, { onConflict: 'id', ignoreDuplicates: false });
 
     const { data, error } = await supabase
       .from('classes')
