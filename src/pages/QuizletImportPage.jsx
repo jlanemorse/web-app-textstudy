@@ -32,10 +32,10 @@ function findCardArrays(value, results = []) {
 
 function parseQuizletHtml(html) {
   const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (!match) throw new Error('Could not find card data. Make sure you pasted the full page source.');
+  if (!match) throw new Error('Could not find card data in the page.');
   const nextData = JSON.parse(match[1]);
   const allArrays = findCardArrays(nextData);
-  if (!allArrays.length) throw new Error('No cards found in the page source.');
+  if (!allArrays.length) throw new Error('No cards found. The set may be private or the link may be incorrect.');
   return allArrays.reduce((best, arr) => arr.length > best.length ? arr : best, []);
 }
 
@@ -44,14 +44,16 @@ export default function QuizletImportPage({ session }) {
   const [selectedDeckId, setSelectedDeckId] = useState('');
   const [newDeckName, setNewDeckName] = useState('');
   const [showNewDeck, setShowNewDeck] = useState(false);
-  const [source, setSource] = useState('');
+  const [url, setUrl] = useState('');
   const [parsedCards, setParsedCards] = useState(null);
+  const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => { loadDecks(); }, []);
 
   async function loadDecks() {
-    const { data } = await supabase.from('decks').select('id, name').order('created_at', { ascending: false });
+    const { data } = await supabase.from('decks').select('id, name').eq('user_id', session.user.id).order('created_at', { ascending: false });
     setDecks(data ?? []);
   }
 
@@ -61,13 +63,25 @@ export default function QuizletImportPage({ session }) {
     if (data) { setDecks(prev => [data, ...prev]); setSelectedDeckId(data.id); setNewDeckName(''); setShowNewDeck(false); }
   }
 
-  function handleParse() {
+  async function handleFetch() {
+    setError('');
+    setParsedCards(null);
+    if (!url.trim() || !url.includes('quizlet.com')) {
+      setError('Please enter a valid Quizlet URL.');
+      return;
+    }
+    setFetching(true);
     try {
-      const cards = parseQuizletHtml(source);
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url.trim())}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error('Failed to load the page. Make sure the set is public.');
+      const html = await res.text();
+      const cards = parseQuizletHtml(html);
       setParsedCards(cards);
     } catch (e) {
-      alert(`Could not parse: ${e.message}`);
+      setError(e.message);
     }
+    setFetching(false);
   }
 
   async function handleImport() {
@@ -76,34 +90,34 @@ export default function QuizletImportPage({ session }) {
     await supabase.from('cards').insert(parsedCards.map(c => ({ deck_id: selectedDeckId, front: c.front, back: c.back })));
     const deck = decks.find(d => d.id === selectedDeckId);
     alert(`✅ ${parsedCards.length} cards imported into "${deck?.name}"!`);
-    setSource(''); setParsedCards(null); setSaving(false);
+    setUrl(''); setParsedCards(null); setSaving(false);
   }
 
   return (
     <div style={s.page}>
-      <h1 style={s.title}>🌐 Quizlet Import</h1>
-      <p style={s.sub}>Import any Quizlet set by pasting the page source.</p>
+      <h1 style={s.title}>🌐 Import from Quizlet</h1>
+      <p style={s.sub}>Paste a link to any public Quizlet set and we'll pull the cards in automatically.</p>
 
-      <div style={s.howTo}>
-        <p style={s.howToTitle}>How to get the page source:</p>
-        <ol style={s.steps}>
-          <li>Open the Quizlet set in your browser</li>
-          <li>Press <strong>Cmd+U</strong> (Mac) or <strong>Ctrl+U</strong> (Windows) to view source</li>
-          <li>Press <strong>Cmd+A</strong> then <strong>Cmd+C</strong> to copy all the source</li>
-          <li>Paste it in the box below</li>
-        </ol>
-      </div>
-
-      <div style={s.section}>
-        <label style={s.label}>Page Source</label>
-        <textarea style={{ ...s.textarea, minHeight: 160 }} placeholder="Paste the full Quizlet page source here..." value={source} onChange={e => { setSource(e.target.value); setParsedCards(null); }} />
-      </div>
-
-      {!parsedCards ? (
-        <button style={{ ...s.parseBtn, ...(!source.trim() ? s.disabled : {}) }} onClick={handleParse} disabled={!source.trim()}>
-          🔍 Find Cards
+      <div style={s.inputRow}>
+        <input
+          style={s.urlInput}
+          placeholder="https://quizlet.com/123456/set-name/"
+          value={url}
+          onChange={e => { setUrl(e.target.value); setParsedCards(null); setError(''); }}
+          onKeyDown={e => e.key === 'Enter' && handleFetch()}
+        />
+        <button
+          style={{ ...s.fetchBtn, ...(fetching ? s.fetchBtnLoading : {}) }}
+          onClick={handleFetch}
+          disabled={fetching || !url.trim()}
+        >
+          {fetching ? 'Loading…' : 'Fetch Cards'}
         </button>
-      ) : (
+      </div>
+
+      {error && <p style={s.error}>⚠ {error}</p>}
+
+      {parsedCards && (
         <div style={s.found}>
           <p style={s.foundText}>✅ Found <strong>{parsedCards.length} cards</strong></p>
           <div style={s.previewList}>
@@ -150,15 +164,12 @@ const PURPLE = '#5B4FE9';
 const s = {
   page: { maxWidth: 760, margin: '0 auto', padding: '36px 24px' },
   title: { fontSize: 26, fontWeight: 900, color: '#1A1A2E', marginBottom: 6 },
-  sub: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
-  howTo: { background: '#EEF2FF', borderRadius: 14, padding: '16px 20px', marginBottom: 24 },
-  howToTitle: { fontSize: 14, fontWeight: 700, color: '#3730A3', marginBottom: 8 },
-  steps: { paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 },
-  section: { marginBottom: 20 },
-  label: { display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' },
-  textarea: { width: '100%', padding: '12px 14px', borderRadius: 12, border: '1.5px solid #E5E7EB', fontSize: 13, color: '#1A1A2E', resize: 'vertical', background: '#F9FAFB', lineHeight: 1.5, fontFamily: 'monospace' },
-  parseBtn: { width: '100%', padding: '14px 0', borderRadius: 12, background: PURPLE, color: '#fff', fontSize: 15, fontWeight: 800, border: 'none', cursor: 'pointer' },
-  disabled: { opacity: 0.4 },
+  sub: { fontSize: 14, color: '#6B7280', marginBottom: 24 },
+  inputRow: { display: 'flex', gap: 10, marginBottom: 12 },
+  urlInput: { flex: 1, padding: '13px 16px', borderRadius: 12, border: '1.5px solid #E5E7EB', fontSize: 14, color: '#1A1A2E', background: '#fff', outline: 'none', fontFamily: 'inherit' },
+  fetchBtn: { padding: '13px 24px', borderRadius: 12, background: PURPLE, color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', flexShrink: 0 },
+  fetchBtnLoading: { opacity: 0.6 },
+  error: { fontSize: 14, color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 14px', marginBottom: 16 },
   found: { background: '#fff', borderRadius: 16, padding: 24, border: '1.5px solid #E5E7EB', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' },
   foundText: { fontSize: 16, fontWeight: 700, color: '#1A1A2E', marginBottom: 14 },
   previewList: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 },
@@ -167,6 +178,8 @@ const s = {
   previewArrow: { color: '#9CA3AF', flexShrink: 0 },
   previewBack: { flex: 1, color: '#6B7280' },
   moreText: { fontSize: 13, color: '#9CA3AF', textAlign: 'center' },
+  section: { marginBottom: 20 },
+  label: { display: 'block', fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' },
   newDeckRow: { display: 'flex', gap: 10, marginBottom: 10 },
   newDeckBtn: { padding: '9px 18px', borderRadius: 10, background: '#F4F5F9', border: '1.5px dashed #C7D2FE', fontSize: 14, fontWeight: 700, color: PURPLE, cursor: 'pointer', marginBottom: 10 },
   deckList: { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 },
@@ -175,4 +188,5 @@ const s = {
   input: { flex: 1, padding: '10px 14px', borderRadius: 10, border: '1.5px solid #E5E7EB', fontSize: 14, color: '#1A1A2E', background: '#F9FAFB', fontFamily: 'inherit' },
   importBtn: { width: '100%', padding: '14px 0', borderRadius: 12, background: PURPLE, color: '#fff', fontSize: 15, fontWeight: 800, border: 'none', cursor: 'pointer' },
   cancelBtn: { padding: '10px 16px', borderRadius: 10, background: '#F4F5F9', color: '#6B7280', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer' },
+  disabled: { opacity: 0.4 },
 };

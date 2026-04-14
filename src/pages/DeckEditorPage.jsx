@@ -30,7 +30,13 @@ export default function DeckEditorPage({ session }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => { loadDeck(); }, [deckId]);
+  const [pushOpen, setPushOpen] = useState(false);
+  const [isTeacher, setIsTeacher] = useState(false);
+  const [classes, setClasses] = useState([]);
+  const [pushedClassIds, setPushedClassIds] = useState(new Set());
+  const [pushing, setPushing] = useState(null);
+
+  useEffect(() => { loadDeck(); checkRole(); }, [deckId]);
 
   async function loadDeck() {
     const [{ data: d }, { data: c }] = await Promise.all([
@@ -84,6 +90,31 @@ export default function DeckEditorPage({ session }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function checkRole() {
+    const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+    setIsTeacher(data?.role === 'teacher');
+  }
+
+  async function openPushModal() {
+    setPushOpen(true);
+    const { data: classRows } = await supabase
+      .from('classes').select('id, name').eq('teacher_id', session.user.id).order('created_at', { ascending: false });
+    setClasses(classRows ?? []);
+    if (classRows?.length) {
+      const { data: cdRows } = await supabase
+        .from('class_decks').select('class_id').eq('deck_id', deckId)
+        .in('class_id', classRows.map(c => c.id));
+      setPushedClassIds(new Set((cdRows ?? []).map(cd => cd.class_id)));
+    }
+  }
+
+  async function handlePush(classId) {
+    setPushing(classId);
+    await supabase.from('class_decks').upsert({ class_id: classId, deck_id: deckId });
+    setPushedClassIds(prev => new Set([...prev, classId]));
+    setPushing(null);
+  }
+
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontSize: 32 }}>📚</div>;
 
   const shareLink = buildShareLink(deck, cards);
@@ -95,6 +126,7 @@ export default function DeckEditorPage({ session }) {
           <button style={s.backBtn} onClick={() => navigate('/')}>← My Decks</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={s.autoSaveLabel}>✓ Auto-saved</span>
+            {isTeacher && <button style={s.pushBtn} onClick={openPushModal}>📤 Push to Class</button>}
             {cards.length > 0 && <button style={s.shareBtn} onClick={() => setShareOpen(true)}>📱 Send to Phone</button>}
           </div>
         </div>
@@ -197,6 +229,38 @@ export default function DeckEditorPage({ session }) {
         )}
       </div>
 
+      {/* Push to Class modal */}
+      {pushOpen && (
+        <div style={s.modalOverlay} onClick={() => setPushOpen(false)}>
+          <div style={s.modal} onClick={e => e.stopPropagation()}>
+            <h2 style={s.modalTitle}>📤 Push to Class</h2>
+            <p style={s.modalSub}>Students in the selected class will be able to add "{deck.name}" to their decks.</p>
+            {classes.length === 0 ? (
+              <p style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 24 }}>You have no classes yet. Create one from the Classes tab.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+                {classes.map(cls => {
+                  const pushed = pushedClassIds.has(cls.id);
+                  return (
+                    <div key={cls.id} style={s.classRow}>
+                      <span style={s.classRowName}>{cls.name}</span>
+                      <button
+                        style={{ ...s.classPushBtn, ...(pushed ? s.classPushBtnDone : {}) }}
+                        onClick={() => !pushed && handlePush(cls.id)}
+                        disabled={pushed || pushing === cls.id}
+                      >
+                        {pushing === cls.id ? '...' : pushed ? '✓ Pushed' : 'Push'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <button style={s.modalClose} onClick={() => setPushOpen(false)}>Done</button>
+          </div>
+        </div>
+      )}
+
       {/* Share modal */}
       {shareOpen && (
         <div style={s.modalOverlay} onClick={() => setShareOpen(false)}>
@@ -235,6 +299,11 @@ const s = {
   autoSaveLabel: { fontSize: 12, fontWeight: 600, color: '#16A34A' },
   navRight: { display: 'flex', gap: 12 },
   shareBtn: { padding: '9px 18px', borderRadius: 10, background: PURPLE, color: '#fff', fontSize: 14, fontWeight: 800, boxShadow: '0 3px 10px rgba(91,79,233,0.3)' },
+  pushBtn: { padding: '9px 18px', borderRadius: 10, background: '#1A1A2E', color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer' },
+  classRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F4F5F9', borderRadius: 12, padding: '12px 16px' },
+  classRowName: { fontSize: 15, fontWeight: 700, color: '#1A1A2E' },
+  classPushBtn: { padding: '7px 18px', borderRadius: 8, background: PURPLE, color: '#fff', fontSize: 13, fontWeight: 800, border: 'none', cursor: 'pointer' },
+  classPushBtnDone: { background: '#D1FAE5', color: '#065F46', cursor: 'default' },
 
   content: { maxWidth: 760, margin: '0 auto', padding: '32px 24px' },
   topBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 },
