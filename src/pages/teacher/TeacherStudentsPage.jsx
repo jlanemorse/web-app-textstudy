@@ -124,7 +124,7 @@ export default function TeacherStudentsPage({ session }) {
       ) : (
         <div style={s.list}>
           {filtered.map(st => (
-            <div key={st.id} style={s.card} onClick={() => navigate(`/teacher/students/${st.id}`)}>
+            <div key={st.id} className="ts-card" style={s.card} onClick={() => navigate(`/teacher/students/${st.id}`)}>
               <div style={s.cardTop}>
                 <div style={s.info}>
                   <p style={s.name}>{st.name}</p>
@@ -173,8 +173,8 @@ const PURPLE = '#5B4FE9';
 const s = {
   page: { maxWidth: 960, margin: '0 auto', padding: '36px 24px' },
   header: { marginBottom: 20 },
-  title: { fontSize: 28, fontWeight: 900, color: '#1A1A2E', marginBottom: 4 },
-  sub: { fontSize: 14, color: '#6B7280' },
+  title: { fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 4, textShadow: '0 2px 12px rgba(0,0,0,0.3)' },
+  sub: { fontSize: 14, color: 'rgba(196,181,253,0.8)' },
   search: {
     width: '100%', boxSizing: 'border-box', padding: '12px 16px',
     borderRadius: 12, border: '1.5px solid #E5E7EB', fontSize: 14,

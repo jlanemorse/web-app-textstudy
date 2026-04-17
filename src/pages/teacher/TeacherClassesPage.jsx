@@ -6,12 +6,6 @@ function generateCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-function fmt(ms) {
-  if (!ms || ms < 0) return '0m';
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
 
 export default function TeacherClassesPage({ session }) {
   const navigate = useNavigate();
@@ -56,7 +50,7 @@ export default function TeacherClassesPage({ session }) {
           <h1 style={s.title}>My Classes</h1>
           <p style={s.sub}>Create classes and share the join code with your students</p>
         </div>
-        <button style={s.newBtn} onClick={() => setCreating(true)}>+ New Class</button>
+        <button className="ts-btn" style={s.newBtn} onClick={() => setCreating(true)}>+ New Class</button>
       </div>
 
       {creating && (
@@ -82,15 +76,15 @@ export default function TeacherClassesPage({ session }) {
         <div style={s.empty}>
           <p style={{ fontSize: 48, marginBottom: 12 }}>🏫</p>
           <p style={{ fontSize: 18, fontWeight: 800, color: '#1A1A2E', marginBottom: 6 }}>No classes yet</p>
-          <p style={{ fontSize: 14, color: '#6B7280', marginBottom: 24 }}>Create a class and share the code with your students</p>
-          <button style={s.newBtn} onClick={() => setCreating(true)}>+ Create First Class</button>
+          <p style={{ fontSize: 14, color: 'rgba(196,181,253,0.8)', marginBottom: 24 }}>Create a class and share the code with your students</p>
+          <button className="ts-btn" style={s.newBtn} onClick={() => setCreating(true)}>+ Create First Class</button>
         </div>
       ) : (
         <div style={s.grid}>
           {classes.map(cls => {
             const count = cls.class_members?.[0]?.count ?? 0;
             return (
-              <div key={cls.id} style={s.classCard} onClick={() => navigate(`/teacher/classes/${cls.id}`)}>
+              <div key={cls.id} className="ts-card" style={s.classCard} onClick={() => navigate(`/teacher/classes/${cls.id}`)}>
                 <div style={s.cardTop}>
                   <p style={s.className}>{cls.name}</p>
                   <div style={s.codePill}>{cls.code}</div>
@@ -113,8 +107,8 @@ const PURPLE = '#5B4FE9';
 const s = {
   page: { maxWidth: 900, margin: '0 auto', padding: '36px 24px' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 },
-  title: { fontSize: 28, fontWeight: 900, color: '#1A1A2E', marginBottom: 4 },
-  sub: { fontSize: 14, color: '#6B7280' },
+  title: { fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 4, textShadow: '0 2px 12px rgba(0,0,0,0.3)' },
+  sub: { fontSize: 14, color: 'rgba(196,181,253,0.8)' },
   newBtn: { padding: '11px 22px', borderRadius: 12, background: PURPLE, color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', flexShrink: 0 },
 
   createCard: { background: '#fff', borderRadius: 16, padding: 24, marginBottom: 24, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', gap: 14 },

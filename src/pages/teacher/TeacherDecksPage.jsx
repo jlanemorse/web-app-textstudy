@@ -71,7 +71,7 @@ export default function TeacherDecksPage({ session }) {
           <h1 style={s.title}>My Decks</h1>
           <p style={s.sub}>Create decks and push them to your classes</p>
         </div>
-        <button style={s.newBtn} onClick={() => setCreating(true)}>+ New Deck</button>
+        <button className="ts-btn" style={s.newBtn} onClick={() => setCreating(true)}>+ New Deck</button>
       </div>
 
       {creating && (
@@ -97,7 +97,7 @@ export default function TeacherDecksPage({ session }) {
         <div style={s.empty}>
           <p style={{ fontSize: 48, marginBottom: 12 }}>🗂️</p>
           <p style={{ fontSize: 18, fontWeight: 800, color: '#1A1A2E', marginBottom: 6 }}>No decks yet</p>
-          <p style={{ fontSize: 14, color: '#6B7280', marginBottom: 24 }}>Create decks and push them to your classes</p>
+          <p style={{ fontSize: 14, color: 'rgba(196,181,253,0.8)', marginBottom: 24 }}>Create decks and push them to your classes</p>
           <button style={s.newBtn} onClick={() => setCreating(true)}>+ Create First Deck</button>
         </div>
       ) : (
@@ -105,7 +105,7 @@ export default function TeacherDecksPage({ session }) {
           {decks.map(d => {
             const count = d.cards?.[0]?.count ?? 0;
             return (
-              <div key={d.id} style={s.deckCard} onClick={() => navigate(`/teacher/decks/${d.id}`)}>
+              <div key={d.id} className="ts-card" style={s.deckCard} onClick={() => navigate(`/teacher/decks/${d.id}`)}>
                 <p style={s.deckName}>{d.name}</p>
                 <p style={s.deckMeta}>{count} card{count !== 1 ? 's' : ''}</p>
                 <div style={s.cardFooter}>
@@ -160,8 +160,8 @@ const PURPLE = '#5B4FE9';
 const s = {
   page: { maxWidth: 900, margin: '0 auto', padding: '36px 24px' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 },
-  title: { fontSize: 28, fontWeight: 900, color: '#1A1A2E', marginBottom: 4 },
-  sub: { fontSize: 14, color: '#6B7280' },
+  title: { fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 4, textShadow: '0 2px 12px rgba(0,0,0,0.3)' },
+  sub: { fontSize: 14, color: 'rgba(196,181,253,0.8)' },
   newBtn: { padding: '11px 22px', borderRadius: 12, background: PURPLE, color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', flexShrink: 0 },
   createCard: { background: '#fff', borderRadius: 16, padding: 24, marginBottom: 24, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', gap: 14 },
   input: { padding: '12px 14px', borderRadius: 10, border: '1.5px solid #E5E7EB', fontSize: 15, color: '#1A1A2E', outline: 'none', width: '100%', boxSizing: 'border-box' },

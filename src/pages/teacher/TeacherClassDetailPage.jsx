@@ -12,12 +12,6 @@ function fmtDate(iso) {
   return d.toLocaleDateString();
 }
 
-function fmt(ms) {
-  if (!ms) return '0m';
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
 
 export default function TeacherClassDetailPage({ session }) {
   const { classId } = useParams();
@@ -160,7 +154,7 @@ export default function TeacherClassDetailPage({ session }) {
           {students.map(st => {
             const myNames = new Set(studentDecks.filter(d => d.user_id === st.id).map(d => d.name));
             return (
-              <div key={st.id} style={s.studentCard} onClick={() => navigate(`/teacher/students/${st.id}`)}>
+              <div key={st.id} className="ts-card" style={s.studentCard} onClick={() => navigate(`/teacher/students/${st.id}`)}>
                 <div style={s.studentTop}>
                   <div style={s.studentInfo}>
                     <p style={s.studentName}>{st.name}</p>
@@ -199,11 +193,11 @@ export default function TeacherClassDetailPage({ session }) {
 const PURPLE = '#5B4FE9';
 const s = {
   page: { maxWidth: 960, margin: '0 auto', padding: '36px 24px' },
-  back: { fontSize: 14, fontWeight: 700, color: PURPLE, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 20, display: 'block' },
+  back: { fontSize: 14, fontWeight: 700, color: 'rgba(196,181,253,0.9)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 20, display: 'block' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 },
-  title: { fontSize: 28, fontWeight: 900, color: '#1A1A2E', marginBottom: 8 },
+  title: { fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 8, textShadow: '0 2px 12px rgba(0,0,0,0.3)' },
   codeRow: { display: 'flex', alignItems: 'center', gap: 10 },
-  codeLabel: { fontSize: 13, color: '#6B7280', fontWeight: 600 },
+  codeLabel: { fontSize: 13, color: 'rgba(196,181,253,0.8)', fontWeight: 600 },
   code: { fontSize: 20, fontWeight: 900, color: PURPLE, letterSpacing: 3, background: '#EEF2FF', borderRadius: 8, padding: '4px 12px' },
   copyBtn: { fontSize: 12, fontWeight: 700, color: '#fff', background: PURPLE, border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' },
   pushBtn: { padding: '11px 20px', borderRadius: 12, background: '#1A1A2E', color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer' },

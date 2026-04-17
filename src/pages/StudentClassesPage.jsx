@@ -76,7 +76,7 @@ export default function StudentClassesPage({ session }) {
       ) : (
         <div style={s.classList}>
           {classes.map(cls => (
-            <div key={cls.id} style={s.classCard}>
+            <div key={cls.id} className="ts-card" style={s.classCard}>
               <div style={s.classHeader}>
                 <div>
                   <p style={s.className}>{cls.name}</p>
@@ -118,8 +118,8 @@ export default function StudentClassesPage({ session }) {
 const PURPLE = '#5B4FE9';
 const s = {
   page: { maxWidth: 800, margin: '0 auto', padding: '36px 24px' },
-  title: { fontSize: 28, fontWeight: 900, color: '#1A1A2E', marginBottom: 4 },
-  sub: { fontSize: 14, color: '#6B7280', marginBottom: 28 },
+  title: { fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 4, textShadow: '0 2px 12px rgba(0,0,0,0.3)' },
+  sub: { fontSize: 14, color: 'rgba(196,181,253,0.8)', marginBottom: 28 },
   empty: { background: '#fff', borderRadius: 16, padding: 48, textAlign: 'center' },
   classList: { display: 'flex', flexDirection: 'column', gap: 20 },
   classCard: { background: '#fff', borderRadius: 18, padding: 24, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' },

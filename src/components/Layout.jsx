@@ -24,9 +24,7 @@ export default function Layout({ children, session }) {
   useEffect(() => {
     if (!session?.user?.id) return;
     supabase.from('profiles').select('display_name').eq('id', session.user.id).single()
-      .then(({ data }) => {
-        if (data?.display_name) setDisplayName(data.display_name);
-      });
+      .then(({ data }) => { if (data?.display_name) setDisplayName(data.display_name); });
   }, [session]);
 
   async function saveName() {
@@ -37,21 +35,23 @@ export default function Layout({ children, session }) {
     await supabase.from('profiles').upsert({ id: session.user.id, display_name: trimmed }, { onConflict: 'id' });
   }
 
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-  }
-
   return (
     <div style={s.shell}>
       <aside style={s.sidebar}>
-        <div style={s.logo}>📚 TextStudy</div>
+        {/* Logo */}
+        <div style={s.logoWrap}>
+          <span style={s.logoIcon}>📚</span>
+          <span style={s.logoText}>TextStudy</span>
+        </div>
+
+        {/* Nav */}
         <nav style={s.nav}>
           {NAV.map(item => {
             const active = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path));
             return (
               <button
                 key={item.path}
-                style={{ ...s.navItem, ...(active ? s.navItemActive : {}) }}
+                className={`ts-nav-item${active ? ' active' : ''}`}
                 onClick={() => navigate(item.path)}
               >
                 <span style={s.navEmoji}>{item.emoji}</span>
@@ -60,6 +60,8 @@ export default function Layout({ children, session }) {
             );
           })}
         </nav>
+
+        {/* Bottom */}
         <div style={s.sidebarBottom}>
           {editingName ? (
             <input
@@ -73,11 +75,12 @@ export default function Layout({ children, session }) {
             />
           ) : (
             <button style={s.nameBtn} onClick={() => { setNameDraft(displayName); setEditingName(true); }}>
-              {displayName || session?.user?.email || '—'}
+              <span style={s.nameAvatar}>{(displayName || session?.user?.email || '?')[0].toUpperCase()}</span>
+              <span style={s.nameText}>{displayName || session?.user?.email || '—'}</span>
               <span style={s.namePencil}>✎</span>
             </button>
           )}
-          <button style={s.signOut} onClick={handleSignOut}>Sign Out</button>
+          <button style={s.signOut} onClick={() => supabase.auth.signOut()}>Sign Out</button>
         </div>
       </aside>
       <main style={s.main}>{children}</main>
@@ -85,29 +88,43 @@ export default function Layout({ children, session }) {
   );
 }
 
-const PURPLE = '#5B4FE9';
-
 const s = {
   shell: { display: 'flex', minHeight: '100vh' },
   sidebar: {
-    width: 220, background: '#fff', borderRight: '1px solid #E5E7EB',
-    display: 'flex', flexDirection: 'column', padding: '24px 12px',
+    width: 228,
+    background: 'linear-gradient(180deg, rgba(30,27,75,0.95) 0%, rgba(26,26,46,0.98) 100%)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    borderRight: '1px solid rgba(255,255,255,0.08)',
+    display: 'flex', flexDirection: 'column', padding: '20px 10px',
     position: 'sticky', top: 0, height: '100vh', flexShrink: 0,
+    boxShadow: '2px 0 32px rgba(0,0,0,0.3)',
   },
-  logo: { fontSize: 16, fontWeight: 900, color: '#1A1A2E', padding: '0 8px', marginBottom: 28 },
-  nav: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1 },
-  navItem: {
-    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-    borderRadius: 10, fontSize: 14, fontWeight: 600, color: '#6B7280',
-    background: 'transparent', border: 'none', cursor: 'pointer',
-    textAlign: 'left', transition: 'all 0.12s',
-  },
-  navItemActive: { background: '#EEF2FF', color: PURPLE, fontWeight: 700 },
+  logoWrap: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px', marginBottom: 24 },
+  logoIcon: { fontSize: 22 },
+  logoText: { fontSize: 17, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' },
+  nav: { display: 'flex', flexDirection: 'column', gap: 2, flex: 1 },
   navEmoji: { fontSize: 16 },
-  sidebarBottom: { borderTop: '1px solid #F3F4F6', paddingTop: 16, paddingLeft: 8 },
-  nameBtn: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#374151', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 8, maxWidth: '100%', textAlign: 'left', wordBreak: 'break-all' },
-  namePencil: { fontSize: 11, color: '#9CA3AF', flexShrink: 0 },
-  nameInput: { width: '100%', fontSize: 13, padding: '6px 8px', borderRadius: 8, border: '1.5px solid #5B4FE9', marginBottom: 8, outline: 'none', boxSizing: 'border-box' },
-  signOut: { fontSize: 13, fontWeight: 700, color: '#6B7280', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 },
-  main: { flex: 1, minHeight: '100vh', overflowY: 'auto' },
+  sidebarBottom: {
+    borderTop: '1px solid rgba(255,255,255,0.08)',
+    paddingTop: 14, paddingLeft: 4, paddingRight: 4,
+  },
+  nameBtn: {
+    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    padding: '8px 8px', borderRadius: 10, marginBottom: 6,
+    transition: 'background 0.15s',
+  },
+  nameAvatar: {
+    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+    background: 'linear-gradient(135deg, #7268F2, #5B4FE9)',
+    color: '#fff', fontSize: 12, fontWeight: 800,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 2px 6px rgba(91,79,233,0.5)',
+  },
+  nameText: { flex: 1, fontSize: 13, fontWeight: 700, color: 'rgba(196,181,253,0.8)', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  namePencil: { fontSize: 11, color: 'rgba(196,181,253,0.4)', flexShrink: 0 },
+  nameInput: { width: '100%', fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1.5px solid #5B4FE9', marginBottom: 8, outline: 'none', boxSizing: 'border-box', background: '#2D2B4E', color: '#fff', boxShadow: '0 0 0 3px rgba(91,79,233,0.2)' },
+  signOut: { fontSize: 13, fontWeight: 600, color: 'rgba(196,181,253,0.4)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 8, transition: 'color 0.15s' },
+  main: { flex: 1, minHeight: '100vh', overflowY: 'auto', background: 'transparent' },
 };

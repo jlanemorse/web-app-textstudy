@@ -107,6 +107,7 @@ export default function QuizletImportPage({ session }) {
           onKeyDown={e => e.key === 'Enter' && handleFetch()}
         />
         <button
+          className="ts-btn"
           style={{ ...s.fetchBtn, ...(fetching ? s.fetchBtnLoading : {}) }}
           onClick={handleFetch}
           disabled={fetching || !url.trim()}
@@ -163,8 +164,8 @@ export default function QuizletImportPage({ session }) {
 const PURPLE = '#5B4FE9';
 const s = {
   page: { maxWidth: 760, margin: '0 auto', padding: '36px 24px' },
-  title: { fontSize: 26, fontWeight: 900, color: '#1A1A2E', marginBottom: 6 },
-  sub: { fontSize: 14, color: '#6B7280', marginBottom: 24 },
+  title: { fontSize: 26, fontWeight: 900, color: '#fff', marginBottom: 6, textShadow: '0 2px 12px rgba(0,0,0,0.3)' },
+  sub: { fontSize: 14, color: 'rgba(196,181,253,0.8)', marginBottom: 24 },
   inputRow: { display: 'flex', gap: 10, marginBottom: 12 },
   urlInput: { flex: 1, padding: '13px 16px', borderRadius: 12, border: '1.5px solid #E5E7EB', fontSize: 14, color: '#1A1A2E', background: '#fff', outline: 'none', fontFamily: 'inherit' },
   fetchBtn: { padding: '13px 24px', borderRadius: 12, background: PURPLE, color: '#fff', fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer', flexShrink: 0 },

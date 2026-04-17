@@ -16,7 +16,7 @@ export default function TeacherCreatePage() {
       <p style={s.sub}>Choose how you want to build your deck</p>
       <div style={s.grid}>
         {OPTIONS.map(opt => (
-          <button key={opt.id} style={s.card} onClick={() => navigate(`/teacher/create/${opt.id}`)}>
+          <button key={opt.id} className="ts-card" style={s.card} onClick={() => navigate(`/teacher/create/${opt.id}`)}>
             <span style={s.emoji}>{opt.emoji}</span>
             <p style={s.label}>{opt.label}</p>
             <p style={s.optSub}>{opt.sub}</p>
@@ -29,8 +29,8 @@ export default function TeacherCreatePage() {
 
 const s = {
   page: { maxWidth: 800, margin: '0 auto', padding: '36px 24px' },
-  title: { fontSize: 28, fontWeight: 900, color: '#1A1A2E', marginBottom: 6 },
-  sub: { fontSize: 14, color: '#6B7280', marginBottom: 32 },
+  title: { fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 6, textShadow: '0 2px 12px rgba(0,0,0,0.3)' },
+  sub: { fontSize: 14, color: 'rgba(196,181,253,0.8)', marginBottom: 32 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 },
   card: {
     background: '#fff', borderRadius: 18, padding: 28, textAlign: 'left',

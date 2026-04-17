@@ -72,7 +72,7 @@ export default function AuthPage() {
           )}
           {error && <p style={s.error}>{error}</p>}
           {success && <p style={s.successMsg}>{success}</p>}
-          <button style={s.btn} type="submit" disabled={loading}>
+          <button className="ts-btn" style={s.btn} type="submit" disabled={loading}>
             {loading ? '...' : mode === 'login' ? 'Log In' : 'Create Account'}
           </button>
         </form>
@@ -84,8 +84,8 @@ export default function AuthPage() {
 const PURPLE = '#5B4FE9';
 
 const s = {
-  page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, background: '#F4F5F9' },
-  card: { background: '#fff', borderRadius: 24, padding: '40px 36px', width: '100%', maxWidth: 420, boxShadow: '0 8px 40px rgba(0,0,0,0.1)', textAlign: 'center' },
+  page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  card: { background: '#fff', borderRadius: 24, padding: '40px 36px', width: '100%', maxWidth: 420, boxShadow: '0 2px 4px rgba(0,0,0,0.04), 0 20px 60px rgba(91,79,233,0.12), inset 0 1px 0 rgba(255,255,255,0.9)', textAlign: 'center' },
   logo: { fontSize: 48, marginBottom: 8 },
   title: { fontSize: 28, fontWeight: 900, color: '#1A1A2E', marginBottom: 6 },
   sub: { fontSize: 14, color: '#6B7280', marginBottom: 28, lineHeight: 1.5 },
