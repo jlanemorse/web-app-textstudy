@@ -4,7 +4,8 @@ import { supabase } from '../supabase';
 
 export default function DashboardPage({ session }) {
   const [decks, setDecks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => { loadDecks(); }, []);
@@ -20,6 +21,18 @@ export default function DashboardPage({ session }) {
     if (!name?.trim()) return;
     const { data, error } = await supabase.from('decks').insert({ name: name.trim(), user_id: session.user.id }).select().single();
     if (!error && data) navigate(`/deck/${data.id}`);
+  }
+
+  async function handleShareDeck(deck) {
+    const { data: cards } = await supabase.from('cards').select('front, back').eq('deck_id', deck.id);
+    if (!cards?.length) { alert('Add some cards to this deck before sharing.'); return; }
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const { error } = await supabase.from('shared_decks').insert({ code, deck_name: deck.name, cards });
+    if (error) { alert('Could not create share code. Try again.'); return; }
+    await navigator.clipboard.writeText(code);
+    setCopiedId(deck.id);
+    setTimeout(() => setCopiedId(null), 3000);
   }
 
   async function handleDeleteDeck(deck) {
@@ -78,6 +91,9 @@ export default function DashboardPage({ session }) {
                 </div>
                 <div style={s.deckActions}>
                   <button style={s.editBtn} onClick={() => navigate(`/deck/${deck.id}`)}>Edit Cards →</button>
+                  <button style={s.shareBtn} onClick={() => handleShareDeck(deck)}>
+                    {copiedId === deck.id ? '✓ Copied!' : '⬆ Share'}
+                  </button>
                   <button className="ts-btn-danger" style={s.deleteBtn} onClick={() => handleDeleteDeck(deck)}>Delete</button>
                 </div>
               </div>
@@ -120,6 +136,7 @@ const s = {
 
   deckActions: { display: 'flex', borderTop: '1px solid #F3F4F6', marginTop: 4 },
   editBtn: { flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 700, color: PURPLE, background: 'transparent', border: 'none', borderRight: '1px solid #F3F4F6', cursor: 'pointer', transition: 'background 0.15s', borderRadius: '0 0 0 18px' },
+  shareBtn: { padding: '12px 16px', fontSize: 13, fontWeight: 700, color: '#059669', background: 'transparent', border: 'none', borderRight: '1px solid #F3F4F6', cursor: 'pointer' },
   deleteBtn: { padding: '12px 16px', fontSize: 13, fontWeight: 700, color: '#EF4444', background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '0 0 18px 0' },
 
   empty: { textAlign: 'center', padding: '80px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 },
