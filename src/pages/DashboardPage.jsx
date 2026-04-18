@@ -23,6 +23,27 @@ export default function DashboardPage({ session }) {
     if (!error && data) navigate(`/deck/${data.id}`);
   }
 
+  async function handleImportDeck() {
+    const code = prompt('Enter the 6-character share code:');
+    if (!code?.trim()) return;
+    const { data, error } = await supabase
+      .from('shared_decks')
+      .select('deck_name, cards')
+      .eq('code', code.trim().toUpperCase())
+      .single();
+    if (error || !data) { alert('No deck found with that code. Check it and try again.'); return; }
+    const { data: newDeck, error: deckErr } = await supabase
+      .from('decks')
+      .insert({ name: data.deck_name, user_id: session.user.id })
+      .select().single();
+    if (deckErr) { alert('Could not create deck. Try again.'); return; }
+    const cardRows = data.cards.filter(c => c.front?.trim() && c.back?.trim())
+      .map(c => ({ deck_id: newDeck.id, front: c.front.trim(), back: c.back.trim() }));
+    if (cardRows.length) await supabase.from('cards').insert(cardRows);
+    alert(`"${data.deck_name}" imported with ${cardRows.length} cards!`);
+    loadDecks();
+  }
+
   async function handleShareDeck(deck) {
     const { data: cards } = await supabase.from('cards').select('front, back').eq('deck_id', deck.id);
     if (!cards?.length) { alert('Add some cards to this deck before sharing.'); return; }
@@ -48,7 +69,10 @@ export default function DashboardPage({ session }) {
           <h1 style={s.title}>My Decks</h1>
           <p style={s.sub}>Create and manage your flashcard decks</p>
         </div>
-        <button className="ts-btn" style={s.newBtn} onClick={handleNewDeck}>+ New Deck</button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="ts-btn" style={{ ...s.newBtn, background: '#059669' }} onClick={handleImportDeck}>⬇ Import Code</button>
+          <button className="ts-btn" style={s.newBtn} onClick={handleNewDeck}>+ New Deck</button>
+        </div>
       </div>
 
       {loading ? (
